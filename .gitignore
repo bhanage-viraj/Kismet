@@ -1,0 +1,19 @@
+# macOS / Xcode
+.DS_Store
+**/xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# Server
+server/.env
+server/target/
+server/.mvn/wrapper/maven-wrapper.jar
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Secrets
+**/*.p12
+**/*.mobileprovision
