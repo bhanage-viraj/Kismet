@@ -9,9 +9,15 @@ import SwiftUI
 
 @main
 struct KismetApp: App {
-    var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
-    }
+	@State private var authSession = AppEnvironment.shared.authSession
+
+	var body: some Scene {
+		WindowGroup {
+			ContentView()
+				.environment(authSession)
+				.task {
+					await authSession.restore()
+				}
+		}
+	}
 }
