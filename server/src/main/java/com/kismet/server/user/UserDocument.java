@@ -1,6 +1,8 @@
 package com.kismet.server.user;
 
 import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
@@ -17,6 +19,12 @@ public class UserDocument {
 
 	private String email;
 	private String displayName;
+	private List<String> interests = List.of();
+	private String weekdayAvailability;
+	private String weekendAvailability;
+	private String customAvailabilityStart;
+	private String customAvailabilityEnd;
+	private Map<String, AvailabilityWindow> dailyAvailability = Map.of();
 	private String refreshTokenHash;
 	private boolean onboardingCompleted;
 	private Instant createdAt;
@@ -54,6 +62,54 @@ public class UserDocument {
 		this.displayName = displayName;
 	}
 
+	public List<String> getInterests() {
+		return interests == null ? List.of() : interests;
+	}
+
+	public void setInterests(List<String> interests) {
+		this.interests = interests == null ? List.of() : List.copyOf(interests);
+	}
+
+	public String getWeekdayAvailability() {
+		return weekdayAvailability;
+	}
+
+	public void setWeekdayAvailability(String weekdayAvailability) {
+		this.weekdayAvailability = weekdayAvailability;
+	}
+
+	public String getWeekendAvailability() {
+		return weekendAvailability;
+	}
+
+	public void setWeekendAvailability(String weekendAvailability) {
+		this.weekendAvailability = weekendAvailability;
+	}
+
+	public String getCustomAvailabilityStart() {
+		return customAvailabilityStart;
+	}
+
+	public void setCustomAvailabilityStart(String customAvailabilityStart) {
+		this.customAvailabilityStart = customAvailabilityStart;
+	}
+
+	public String getCustomAvailabilityEnd() {
+		return customAvailabilityEnd;
+	}
+
+	public void setCustomAvailabilityEnd(String customAvailabilityEnd) {
+		this.customAvailabilityEnd = customAvailabilityEnd;
+	}
+
+	public Map<String, AvailabilityWindow> getDailyAvailability() {
+		return dailyAvailability == null ? Map.of() : dailyAvailability;
+	}
+
+	public void setDailyAvailability(Map<String, AvailabilityWindow> dailyAvailability) {
+		this.dailyAvailability = dailyAvailability == null ? Map.of() : Map.copyOf(dailyAvailability);
+	}
+
 	public String getRefreshTokenHash() {
 		return refreshTokenHash;
 	}
@@ -84,5 +140,73 @@ public class UserDocument {
 
 	public void setUpdatedAt(Instant updatedAt) {
 		this.updatedAt = updatedAt;
+	}
+
+	public static class AvailabilityWindow {
+		private int startMinutes;
+		private int endMinutes;
+		private List<BusySegment> busySegments = List.of();
+
+		public AvailabilityWindow() {
+		}
+
+		public AvailabilityWindow(int startMinutes, int endMinutes, List<BusySegment> busySegments) {
+			this.startMinutes = startMinutes;
+			this.endMinutes = endMinutes;
+			this.busySegments = busySegments == null ? List.of() : List.copyOf(busySegments);
+		}
+
+		public int getStartMinutes() {
+			return startMinutes;
+		}
+
+		public void setStartMinutes(int startMinutes) {
+			this.startMinutes = startMinutes;
+		}
+
+		public int getEndMinutes() {
+			return endMinutes;
+		}
+
+		public void setEndMinutes(int endMinutes) {
+			this.endMinutes = endMinutes;
+		}
+
+		public List<BusySegment> getBusySegments() {
+			return busySegments == null ? List.of() : busySegments;
+		}
+
+		public void setBusySegments(List<BusySegment> busySegments) {
+			this.busySegments = busySegments == null ? List.of() : List.copyOf(busySegments);
+		}
+	}
+
+	public static class BusySegment {
+		private int startMinutes;
+		private int endMinutes;
+
+		public BusySegment() {
+		}
+
+		public BusySegment(int startMinutes, int endMinutes) {
+			this.startMinutes = startMinutes;
+			this.endMinutes = endMinutes;
+		}
+
+		public int getStartMinutes() {
+			return startMinutes;
+		}
+
+		public void setStartMinutes(int startMinutes) {
+			this.startMinutes = startMinutes;
+		}
+
+		public int getEndMinutes() {
+			return endMinutes;
+		}
+
+		public void setEndMinutes(int endMinutes) {
+			this.endMinutes = endMinutes;
+		}
 	}
 }

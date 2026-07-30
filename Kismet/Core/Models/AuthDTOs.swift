@@ -9,10 +9,33 @@ struct AppleAuthRequestDTO: Encodable {
 	var identityToken: String
 	var fullName: FullName?
 	var email: String?
+	var interests: [String]
 }
 
 struct RefreshRequestDTO: Encodable {
 	var refreshToken: String
+}
+
+struct InterestsRequestDTO: Encodable {
+	var interests: [String]
+}
+
+struct AvailabilitySetupRequestDTO: Encodable {
+	var weekdayAvailability: String
+	var weekendAvailability: String
+	var dailyAvailability: [DailyAvailabilityDTO]
+}
+
+struct DailyAvailabilityDTO: Encodable {
+	var day: String
+	var startMinutes: Int
+	var endMinutes: Int
+	var busySegments: [BusySegmentDTO]
+}
+
+struct BusySegmentDTO: Codable {
+	var startMinutes: Int
+	var endMinutes: Int
 }
 
 struct AuthResponseDTO: Decodable {
@@ -20,6 +43,7 @@ struct AuthResponseDTO: Decodable {
 		var id: String
 		var displayName: String?
 		var email: String?
+		var interests: [String]
 		var isNewUser: Bool
 		var onboardingCompleted: Bool
 	}
@@ -34,6 +58,7 @@ struct MeResponseDTO: Decodable {
 	var id: String
 	var displayName: String?
 	var email: String?
+	var interests: [String]
 	var onboardingCompleted: Bool
 }
 

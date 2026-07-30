@@ -43,7 +43,12 @@ public class AuthService {
 				email,
 				displayName);
 
-		return issueTokens(result.user(), result.isNewUser());
+		UserDocument user = result.user();
+		if (request.getInterests() != null && !request.getInterests().isEmpty()) {
+			user = userService.updateInterests(user.getId(), request.getInterests());
+		}
+
+		return issueTokens(user, result.isNewUser());
 	}
 
 	public AuthResponse refresh(String refreshToken) {
@@ -80,6 +85,7 @@ public class AuthService {
 				user.getId(),
 				user.getDisplayName(),
 				user.getEmail(),
+				user.getInterests(),
 				isNewUser,
 				user.isOnboardingCompleted());
 

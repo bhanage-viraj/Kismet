@@ -17,7 +17,8 @@ Public. Exchange an Apple identity token for Kismet session tokens.
     "givenName": "Ada",
     "familyName": "Lovelace"
   },
-  "email": "optional@privaterelay.appleid.com"
+  "email": "optional@privaterelay.appleid.com",
+  "interests": ["coffee", "coding", "travel"]
 }
 ```
 
@@ -34,6 +35,7 @@ Public. Exchange an Apple identity token for Kismet session tokens.
     "id": "...",
     "displayName": "Ada Lovelace",
     "email": "optional@privaterelay.appleid.com",
+    "interests": ["coffee", "coding", "travel"],
     "isNewUser": true,
     "onboardingCompleted": false
   }
@@ -67,13 +69,55 @@ Requires Bearer access token.
   "id": "...",
   "displayName": "...",
   "email": "...",
+  "interests": ["coffee", "coding", "travel"],
+  "weekdayAvailability": "After 6:00 PM",
+  "weekendAvailability": "Anytime",
+  "dailyAvailability": {
+    "monday": { "startMinutes": 1080, "endMinutes": 1440 },
+    "sunday": { "startMinutes": 360, "endMinutes": 1440 }
+  },
   "onboardingCompleted": false
 }
 ```
 
 ### `POST /me/onboarding-complete`
 
-Requires Bearer access token. Marks onboarding finished. Returns the same shape as `GET /me`.
+Requires Bearer access token. Saves general availability and marks onboarding finished.
+
+```json
+{
+  "weekdayAvailability": "After 6:00 PM",
+  "weekendAvailability": "Anytime",
+  "dailyAvailability": [
+    {
+      "day": "monday",
+      "startMinutes": 1080,
+      "endMinutes": 1440,
+      "busySegments": [
+        { "startMinutes": 1140, "endMinutes": 1200 }
+      ]
+    },
+    { "day": "tuesday", "startMinutes": 1080, "endMinutes": 1440, "busySegments": [] },
+    { "day": "wednesday", "startMinutes": 1080, "endMinutes": 1440, "busySegments": [] },
+    { "day": "thursday", "startMinutes": 1080, "endMinutes": 1440, "busySegments": [] },
+    { "day": "friday", "startMinutes": 1080, "endMinutes": 1440, "busySegments": [] },
+    { "day": "saturday", "startMinutes": 360, "endMinutes": 1440, "busySegments": [] },
+    { "day": "sunday", "startMinutes": 360, "endMinutes": 1440, "busySegments": [] }
+  ]
+}
+```
+
+Returns the same shape as `GET /me`.
+
+### `POST /me/interests`
+
+Requires Bearer access token. Saves the interests selected during onboarding.
+
+```json
+{
+  "interests": ["coffee", "coding", "travel"]
+}
+```
 
 ## Errors
 
