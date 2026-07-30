@@ -2,71 +2,60 @@ import SwiftUI
 
 struct PostAuthOnboardingView: View {
 	@Environment(AuthSession.self) private var authSession
-	@State private var step = 0
+	@State private var step: Step = .interests
 
 	var body: some View {
-		NavigationStack {
-			Group {
-				if step == 0 {
-					PermissionsView(onContinue: { step = 1 })
-				} else {
-					AvailabilitySetupView {
-						Task {
-							await authSession.completeOnboarding()
+		ZStack {
+			switch step {
+			case .interests:
+				InterestsView { interests in
+					Task {
+						if await authSession.saveInterests(interests) {
+							withAnimation(.easeInOut(duration: 0.45)) {
+								step = .availability
+							}
 						}
 					}
 				}
+				.transition(.opacity)
+
+			case .availability:
+				AvailabilitySetupView(isSaving: authSession.isSavingOnboarding) { availability in
+					Task {
+						await authSession.completeOnboarding(availability)
+					}
+				}
+				.transition(.opacity)
 			}
-			.navigationTitle(step == 0 ? "Permissions" : "Availability")
-			.navigationBarTitleDisplayMode(.inline)
+		}
+		.overlay {
+			if authSession.isSavingOnboarding && step == .interests {
+				ZStack {
+					Color.black.opacity(0.22).ignoresSafeArea()
+					ProgressView()
+						.controlSize(.large)
+						.padding(24)
+						.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+				}
+			}
+		}
+		.alert(
+			"Couldn’t save your setup",
+			isPresented: Binding(
+				get: { authSession.lastErrorMessage != nil },
+				set: { if !$0 { authSession.clearError() } }
+			)
+		) {
+			Button("OK", role: .cancel) {
+				authSession.clearError()
+			}
+		} message: {
+			Text(authSession.lastErrorMessage ?? "")
 		}
 	}
-}
 
-struct PermissionsView: View {
-	var onContinue: () -> Void = {}
-
-	var body: some View {
-		VStack(alignment: .leading, spacing: 20) {
-			Text("Kismet works best with a few permissions.")
-				.font(.title2.weight(.semibold))
-
-			Text("We’ll ask for location and notifications so friends can see when paths cross — always on your terms.")
-				.foregroundStyle(.secondary)
-
-			Spacer()
-
-			Button("Continue") {
-				onContinue()
-			}
-			.buttonStyle(.borderedProminent)
-			.controlSize(.large)
-			.frame(maxWidth: .infinity)
+	private enum Step: Equatable {
+		case interests
+		case availability
 		}
-		.padding(24)
-	}
-}
-
-struct AvailabilitySetupView: View {
-	var onFinish: () -> Void = {}
-
-	var body: some View {
-		VStack(alignment: .leading, spacing: 20) {
-			Text("Set when you’re usually free.")
-				.font(.title2.weight(.semibold))
-
-			Text("You can fine-tune this later. For now, continue to open Kismet.")
-				.foregroundStyle(.secondary)
-
-			Spacer()
-
-			Button("Finish setup") {
-				onFinish()
-			}
-			.buttonStyle(.borderedProminent)
-			.controlSize(.large)
-			.frame(maxWidth: .infinity)
-		}
-		.padding(24)
-	}
 }

@@ -2,11 +2,31 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
 	@Environment(AuthSession.self) private var authSession
-	@State private var isShowingAuth = false
+	@State private var step: Step = .splash
 
 	var body: some View {
 		ZStack {
-			if isShowingAuth {
+			switch step {
+			case .splash:
+				SplashScreenView()
+					.transition(.opacity)
+					.task {
+						try? await Task.sleep(for: .seconds(1.2))
+						guard !Task.isCancelled else { return }
+						withAnimation(.easeInOut(duration: 0.45)) {
+							step = .howItWorks
+						}
+					}
+
+			case .howItWorks:
+				PermissionsView {
+					withAnimation(.easeInOut(duration: 0.45)) {
+						step = .signIn
+					}
+				}
+				.transition(.opacity)
+
+			case .signIn:
 				AuthView { result in
 					Task {
 						await authSession.handleSignInCompletion(result)
@@ -37,19 +57,15 @@ struct OnboardingFlowView: View {
 					Text(authSession.lastErrorMessage ?? "")
 				}
 				.transition(.opacity)
-			} else {
-				SplashScreenView()
-					.transition(.opacity)
-					.task {
-						try? await Task.sleep(for: .seconds(1.2))
-						guard !Task.isCancelled else { return }
-						withAnimation(.easeInOut(duration: 0.45)) {
-							isShowingAuth = true
-						}
-					}
 			}
 		}
 		.ignoresSafeArea()
+	}
+
+	private enum Step {
+		case splash
+		case howItWorks
+		case signIn
 	}
 }
 

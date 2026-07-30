@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +51,11 @@ class AuthServiceTest {
 
 		when(userService.findOrCreateByAppleSub(eq("apple-sub-1"), eq("ada@example.com"), eq("Ada Lovelace")))
 				.thenReturn(new UserService.FindOrCreateResult(created, true));
+		when(userService.updateInterests(eq("user-1"), eq(List.of("coffee", "coding"))))
+				.thenAnswer(invocation -> {
+					created.setInterests(invocation.getArgument(1));
+					return created;
+				});
 		when(userService.save(any(UserDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		AppleAuthRequest request = new AppleAuthRequest();
@@ -59,6 +65,7 @@ class AuthServiceTest {
 		name.setFamilyName("Lovelace");
 		request.setFullName(name);
 		request.setEmail("ada@example.com");
+		request.setInterests(List.of("coffee", "coding"));
 
 		AuthResponse response = authService.signInWithApple(request);
 
@@ -66,7 +73,9 @@ class AuthServiceTest {
 		assertNotNull(response.getRefreshToken());
 		assertEquals(3600, response.getExpiresIn());
 		assertEquals("user-1", response.getUser().getId());
+		assertEquals(List.of("coffee", "coding"), response.getUser().getInterests());
 		assertEquals(true, response.getUser().getIsNewUser());
+		verify(userService).updateInterests("user-1", List.of("coffee", "coding"));
 
 		ArgumentCaptor<UserDocument> captor = ArgumentCaptor.forClass(UserDocument.class);
 		verify(userService).save(captor.capture());

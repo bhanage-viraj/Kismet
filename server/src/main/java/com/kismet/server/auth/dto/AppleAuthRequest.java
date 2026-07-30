@@ -1,5 +1,7 @@
 package com.kismet.server.auth.dto;
 
+import java.util.List;
+
 import jakarta.validation.constraints.NotBlank;
 
 public class AppleAuthRequest {
@@ -9,6 +11,7 @@ public class AppleAuthRequest {
 
 	private FullName fullName;
 	private String email;
+	private List<String> interests;
 
 	public String getIdentityToken() {
 		return identityToken;
@@ -32,6 +35,14 @@ public class AppleAuthRequest {
 
 	public void setEmail(String email) {
 		this.email = email;
+	}
+
+	public List<String> getInterests() {
+		return interests;
+	}
+
+	public void setInterests(List<String> interests) {
+		this.interests = interests;
 	}
 
 	public static class FullName {

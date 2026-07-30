@@ -1,5 +1,7 @@
 package com.kismet.server.auth.dto;
 
+import java.util.List;
+
 public class AuthResponse {
 
 	private String accessToken;
@@ -53,16 +55,24 @@ public class AuthResponse {
 		private String id;
 		private String displayName;
 		private String email;
+		private List<String> interests;
 		private boolean isNewUser;
 		private boolean onboardingCompleted;
 
 		public UserPayload() {
 		}
 
-		public UserPayload(String id, String displayName, String email, boolean isNewUser, boolean onboardingCompleted) {
+		public UserPayload(
+				String id,
+				String displayName,
+				String email,
+				List<String> interests,
+				boolean isNewUser,
+				boolean onboardingCompleted) {
 			this.id = id;
 			this.displayName = displayName;
 			this.email = email;
+			this.interests = interests;
 			this.isNewUser = isNewUser;
 			this.onboardingCompleted = onboardingCompleted;
 		}
@@ -89,6 +99,14 @@ public class AuthResponse {
 
 		public void setEmail(String email) {
 			this.email = email;
+		}
+
+		public List<String> getInterests() {
+			return interests;
+		}
+
+		public void setInterests(List<String> interests) {
+			this.interests = interests;
 		}
 
 		@com.fasterxml.jackson.annotation.JsonProperty("isNewUser")

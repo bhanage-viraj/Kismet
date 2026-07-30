@@ -15,6 +15,7 @@ final class AuthSession {
 	private(set) var phase: Phase = .bootstrapping
 	private(set) var user: AuthResponseDTO.User?
 	private(set) var isSigningIn = false
+	private(set) var isSavingOnboarding = false
 	private(set) var lastErrorMessage: String?
 
 	private let client: APIClient
@@ -59,6 +60,7 @@ final class AuthSession {
 			id: me.id,
 			displayName: me.displayName,
 			email: me.email,
+			interests: me.interests,
 			isNewUser: false,
 			onboardingCompleted: me.onboardingCompleted
 		)
@@ -100,7 +102,8 @@ final class AuthSession {
 			let request = AppleAuthRequestDTO(
 				identityToken: identityToken,
 				fullName: fullName,
-				email: credential.email
+				email: credential.email,
+				interests: []
 			)
 
 			do {
@@ -115,42 +118,49 @@ final class AuthSession {
 				try KeychainStore.set(credential.user, for: .appleUserId)
 
 				user = response.user
-				phase = response.user.onboardingCompleted ? .signedIn : .needsOnboarding
+				phase = phaseAfterSignIn(onboardingCompleted: response.user.onboardingCompleted)
 			} catch {
 				lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 			}
 		}
 	}
 
-	func completeOnboarding() async {
+	func saveInterests(_ interests: [String]) async -> Bool {
+		isSavingOnboarding = true
+		lastErrorMessage = nil
+		defer { isSavingOnboarding = false }
+
+		do {
+			let me: MeResponseDTO = try await client.request(
+				method: "POST",
+				path: "/me/interests",
+				body: InterestsRequestDTO(interests: interests),
+				authorized: true
+			)
+			updateUser(from: me)
+			return true
+		} catch {
+			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+			return false
+		}
+	}
+
+	func completeOnboarding(_ availability: AvailabilitySetupRequestDTO) async {
+		isSavingOnboarding = true
+		lastErrorMessage = nil
+		defer { isSavingOnboarding = false }
+
 		do {
 			let me: MeResponseDTO = try await client.request(
 				method: "POST",
 				path: "/me/onboarding-complete",
-				body: nil as String?,
+				body: availability,
 				authorized: true
 			)
-			user = AuthResponseDTO.User(
-				id: me.id,
-				displayName: me.displayName,
-				email: me.email,
-				isNewUser: false,
-				onboardingCompleted: me.onboardingCompleted
-			)
+			updateUser(from: me)
 			phase = .signedIn
 		} catch {
-			// Local fallback so onboarding UI can proceed when offline during early demos.
-			if var current = user {
-				current = AuthResponseDTO.User(
-					id: current.id,
-					displayName: current.displayName,
-					email: current.email,
-					isNewUser: false,
-					onboardingCompleted: true
-				)
-				user = current
-			}
-			phase = .signedIn
+			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
 	}
 
@@ -165,6 +175,26 @@ final class AuthSession {
 
 	func clearError() {
 		lastErrorMessage = nil
+	}
+
+	private func updateUser(from me: MeResponseDTO) {
+		user = AuthResponseDTO.User(
+			id: me.id,
+			displayName: me.displayName,
+			email: me.email,
+			interests: me.interests,
+			isNewUser: false,
+			onboardingCompleted: me.onboardingCompleted
+		)
+	}
+
+	private func phaseAfterSignIn(onboardingCompleted: Bool) -> Phase {
+		#if DEBUG
+		// Repeat setup after an explicit sign-in, but not when restoring a valid session.
+		return .needsOnboarding
+		#else
+		return onboardingCompleted ? .signedIn : .needsOnboarding
+		#endif
 	}
 
 	private func checkAppleCredentialState() async {
