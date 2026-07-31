@@ -23,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 
 import com.kismet.server.common.ApiException;
@@ -43,11 +44,15 @@ class FriendServiceTest {
 	@Mock
 	private UserService userService;
 
+	@Mock
+	private ApplicationEventPublisher eventPublisher;
+
 	private FriendService friendService;
 
 	@BeforeEach
 	void setUp() {
-		friendService = new FriendService(friendPairRepository, inviteCodeRepository, userService, 60, 500);
+		friendService = new FriendService(
+				friendPairRepository, inviteCodeRepository, userService, eventPublisher, 60, 500);
 	}
 
 	@Test
@@ -194,7 +199,8 @@ class FriendServiceTest {
 
 	@Test
 	void redeemRejectsWhenTheFriendLimitIsReached() {
-		friendService = new FriendService(friendPairRepository, inviteCodeRepository, userService, 60, 1);
+		friendService = new FriendService(
+				friendPairRepository, inviteCodeRepository, userService, eventPublisher, 60, 1);
 		givenValidInviteCode("ABCD1234", "user-1");
 		when(userService.requireById(anyString())).thenAnswer(i -> user(i.getArgument(0), "Someone"));
 		when(friendPairRepository.countByUserIdAndStatus("user-9", PairStatus.ACTIVE)).thenReturn(1L);
@@ -254,6 +260,21 @@ class FriendServiceTest {
 		ArgumentCaptor<FriendPairDocument> captor = ArgumentCaptor.forClass(FriendPairDocument.class);
 		verify(friendPairRepository).save(captor.capture());
 		assertEquals(PairStatus.REVOKED, captor.getValue().getStatus());
+		verify(eventPublisher).publishEvent(new FriendRevokedEvent("user-9", "user-1"));
+	}
+
+	@Test
+	void revokingAnAlreadyRevokedPairDoesNotRepublishTheCleanupEvent() {
+		FriendPairDocument pair = FriendPairDocument.create(
+				"user-1", "user-9", ConnectedVia.INVITE_CODE, PairStatus.ACTIVE, Instant.now());
+		pair.setStatus(PairStatus.REVOKED);
+		when(friendPairRepository.findByUserAIdAndUserBId("user-1", "user-9"))
+				.thenReturn(Optional.of(pair));
+
+		friendService.revokeFriend("user-9", "user-1");
+
+		verify(friendPairRepository, never()).save(any());
+		verify(eventPublisher, never()).publishEvent(any(FriendRevokedEvent.class));
 	}
 
 	@Test

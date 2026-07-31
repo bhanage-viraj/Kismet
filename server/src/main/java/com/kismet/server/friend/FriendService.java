@@ -14,6 +14,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class FriendService {
 	private final FriendPairRepository friendPairRepository;
 	private final InviteCodeRepository inviteCodeRepository;
 	private final UserService userService;
+	private final ApplicationEventPublisher eventPublisher;
 	private final SecureRandom random = new SecureRandom();
 	private final Duration inviteCodeTtl;
 	private final int maxFriends;
@@ -43,11 +45,13 @@ public class FriendService {
 			FriendPairRepository friendPairRepository,
 			InviteCodeRepository inviteCodeRepository,
 			UserService userService,
+			ApplicationEventPublisher eventPublisher,
 			@Value("${kismet.friends.invite-code-ttl-minutes:60}") long inviteCodeTtlMinutes,
 			@Value("${kismet.friends.max-friends:500}") int maxFriends) {
 		this.friendPairRepository = friendPairRepository;
 		this.inviteCodeRepository = inviteCodeRepository;
 		this.userService = userService;
+		this.eventPublisher = eventPublisher;
 		this.inviteCodeTtl = Duration.ofMinutes(inviteCodeTtlMinutes);
 		this.maxFriends = maxFriends;
 	}
@@ -152,6 +156,7 @@ public class FriendService {
 			inviteCodeRepository.save(invite);
 		}
 
+		eventPublisher.publishEvent(new FriendPairedEvent(userId, ownerUserId));
 		return toSummary(saved, owner, userId);
 	}
 
@@ -221,6 +226,7 @@ public class FriendService {
 		pair.setStatus(PairStatus.REVOKED);
 		pair.setUpdatedAt(Instant.now());
 		friendPairRepository.save(pair);
+		eventPublisher.publishEvent(new FriendRevokedEvent(userId, friendUserId));
 	}
 
 	private void assertUnderFriendLimit(String userId) {

@@ -26,3 +26,7 @@ kismet:
   friends:
     invite-code-ttl-minutes: ${INVITE_CODE_TTL_MINUTES:60}
     max-friends: ${MAX_FRIENDS:500}
+  blobs:
+    ttl-hours: ${BLOB_TTL_HOURS:12}
+    max-ciphertext-bytes: ${BLOB_MAX_CIPHERTEXT_BYTES:4096}
+    max-batch-size: ${BLOB_MAX_BATCH_SIZE:500}

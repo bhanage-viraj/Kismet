@@ -1,5 +1,7 @@
 package com.kismet.server.config;
 
+import java.io.IOException;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
 
@@ -7,6 +9,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -16,6 +20,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import jakarta.servlet.http.HttpServletResponse;
 
 @Configuration
 @EnableWebSecurity
@@ -43,9 +49,31 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(HttpMethod.POST, "/auth/apple", "/auth/refresh").permitAll()
 						.requestMatchers("/actuator/health", "/actuator/info").permitAll()
+						// The WebSocket handshake is an HTTP upgrade with no bearer header,
+						// so it cannot be authenticated here. StompAuthChannelInterceptor
+						// authenticates the CONNECT frame instead.
+						.requestMatchers("/ws/**").permitAll()
 						.anyRequest().authenticated())
+				// Without this, an unauthenticated request gets 403 from the default entry
+				// point. The client only refreshes on 401, so every call after the access
+				// token expires would fail outright instead of renewing the session.
+				.exceptionHandling(handling -> handling
+						.authenticationEntryPoint((request, response, ex) ->
+								writeError(response, HttpStatus.UNAUTHORIZED, "Authentication required"))
+						.accessDeniedHandler((request, response, ex) ->
+								writeError(response, HttpStatus.FORBIDDEN, "Access denied")))
 				.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 		return http.build();
+	}
+
+	/** Matches the body shape produced by ApiExceptionHandler so clients decode one format. */
+	private static void writeError(HttpServletResponse response, HttpStatus status, String message)
+			throws IOException {
+		response.setStatus(status.value());
+		response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+		response.getWriter().write(
+				"{\"status\":%d,\"message\":\"%s\",\"timestamp\":\"%s\"}"
+						.formatted(status.value(), message, Instant.now()));
 	}
 
 	@Bean
