@@ -43,6 +43,10 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(HttpMethod.POST, "/auth/apple", "/auth/refresh").permitAll()
 						.requestMatchers("/actuator/health", "/actuator/info").permitAll()
+						// The WebSocket handshake is an HTTP upgrade with no bearer header,
+						// so it cannot be authenticated here. StompAuthChannelInterceptor
+						// authenticates the CONNECT frame instead.
+						.requestMatchers("/ws/**").permitAll()
 						.anyRequest().authenticated())
 				.addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
 		return http.build();
