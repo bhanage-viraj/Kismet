@@ -53,6 +53,23 @@ public class MongoIndexInitializer implements ApplicationRunner {
 						.expire(0, TimeUnit.SECONDS)
 						.named("ttl_invite_code"));
 
-		log.info("Mongo indexes ensured for users, friend_pairs, invite_codes");
+		// One slot per (sender, recipient, kind) so a location refresh overwrites in place
+		// instead of appending a new document on every update.
+		mongoTemplate.indexOps("encrypted_blobs").createIndex(
+				new Index()
+						.on("senderUserId", Sort.Direction.ASC)
+						.on("recipientUserId", Sort.Direction.ASC)
+						.on("kind", Sort.Direction.ASC)
+						.unique()
+						.named("uniq_blob_slot"));
+		mongoTemplate.indexOps("encrypted_blobs").createIndex(
+				new Index().on("recipientUserId", Sort.Direction.ASC).named("idx_blob_recipient"));
+		mongoTemplate.indexOps("encrypted_blobs").createIndex(
+				new Index()
+						.on("expiresAt", Sort.Direction.ASC)
+						.expire(0, TimeUnit.SECONDS)
+						.named("ttl_blob"));
+
+		log.info("Mongo indexes ensured for users, friend_pairs, invite_codes, encrypted_blobs");
 	}
 }
