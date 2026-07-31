@@ -1,4 +1,6 @@
 package com.kismet.server.friend.dto;
 
-public record PairRequest(String inviteCode) {
+import jakarta.validation.constraints.NotBlank;
+
+public record PairRequest(@NotBlank String inviteCode) {
 }

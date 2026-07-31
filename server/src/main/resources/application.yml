@@ -23,3 +23,6 @@ kismet:
     verify-token: ${APPLE_VERIFY_TOKEN:false}
   cors:
     origins: ${CORS_ORIGINS:*}
+  friends:
+    invite-code-ttl-minutes: ${INVITE_CODE_TTL_MINUTES:60}
+    max-friends: ${MAX_FRIENDS:500}

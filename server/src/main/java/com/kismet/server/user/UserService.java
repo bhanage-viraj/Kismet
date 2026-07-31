@@ -1,6 +1,7 @@
 package com.kismet.server.user;
 
 import java.time.Instant;
+import java.time.ZoneId;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -26,6 +27,7 @@ public class UserService {
 			"Anytime", "Mornings", "Afternoons", "Evenings", "Custom");
 	private static final Set<String> DAYS = Set.of(
 			"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday");
+	private static final int MAX_PUBLIC_KEY_LENGTH = 256;
 
 	private final UserRepository userRepository;
 
@@ -35,6 +37,10 @@ public class UserService {
 
 	public Optional<UserDocument> findById(String id) {
 		return userRepository.findById(id);
+	}
+
+	public List<UserDocument> findAllByIds(Iterable<String> ids) {
+		return userRepository.findAllById(ids);
 	}
 
 	public UserDocument requireById(String id) {
@@ -89,6 +95,7 @@ public class UserService {
 			String userId,
 			String weekdayAvailability,
 			String weekendAvailability,
+			String timeZoneId,
 			List<AvailabilityInput> dailyAvailability) {
 		if (!WEEKDAY_AVAILABILITY.contains(weekdayAvailability)
 				|| !WEEKEND_AVAILABILITY.contains(weekendAvailability)) {
@@ -119,8 +126,58 @@ public class UserService {
 		user.setWeekdayAvailability(weekdayAvailability);
 		user.setWeekendAvailability(weekendAvailability);
 		user.setDailyAvailability(windows);
+		if (timeZoneId != null && !timeZoneId.isBlank()) {
+			user.setTimeZoneId(normalizeTimeZoneId(timeZoneId));
+		}
 		user.setOnboardingCompleted(true);
 		return save(user);
+	}
+
+	public UserDocument updateTimeZone(String userId, String timeZoneId) {
+		UserDocument user = requireById(userId);
+		user.setTimeZoneId(normalizeTimeZoneId(timeZoneId));
+		return save(user);
+	}
+
+	/**
+	 * Stores the caller's X25519 public key. The key is opaque here: the server only
+	 * hands it to friends so they can seal blobs. Versions must increase so a replayed
+	 * older key cannot downgrade a user back to a compromised keypair.
+	 */
+	public UserDocument updatePublicKey(String userId, String publicKey, int keyVersion) {
+		if (publicKey == null || publicKey.isBlank()) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Public key is required");
+		}
+		if (publicKey.length() > MAX_PUBLIC_KEY_LENGTH) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Public key is too long");
+		}
+		if (keyVersion < 1) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Key version must be at least 1");
+		}
+
+		UserDocument user = requireById(userId);
+		if (keyVersion < user.getKeyVersion()) {
+			throw new ApiException(HttpStatus.CONFLICT, "Key version is older than the stored key");
+		}
+		if (keyVersion == user.getKeyVersion() && !publicKey.equals(user.getPublicKey())) {
+			throw new ApiException(HttpStatus.CONFLICT, "Key version must increase to rotate the key");
+		}
+
+		user.setPublicKey(publicKey);
+		user.setKeyVersion(keyVersion);
+		user.setKeyUpdatedAt(Instant.now());
+		return save(user);
+	}
+
+	private static String normalizeTimeZoneId(String timeZoneId) {
+		if (timeZoneId == null || timeZoneId.isBlank()) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Time zone is required");
+		}
+		String trimmed = timeZoneId.trim();
+		if (!ZoneId.getAvailableZoneIds().contains(trimmed)) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Unknown time zone: " + trimmed);
+		}
+		return trimmed;
 	}
 
 	public UserDocument updateInterests(String userId, List<String> interests) {
