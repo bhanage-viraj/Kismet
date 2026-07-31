@@ -156,6 +156,7 @@ public class FriendService {
 			inviteCodeRepository.save(invite);
 		}
 
+		eventPublisher.publishEvent(new FriendPairedEvent(userId, ownerUserId));
 		return toSummary(saved, owner, userId);
 	}
 

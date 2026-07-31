@@ -25,6 +25,7 @@ import com.kismet.server.blob.dto.CreateBlobRequest;
 import com.kismet.server.blob.dto.PendingBlob;
 import com.kismet.server.common.ApiException;
 import com.kismet.server.friend.FriendService;
+import com.kismet.server.realtime.RealtimeEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class BlobServiceTest {
@@ -41,11 +42,15 @@ class BlobServiceTest {
 	@Mock
 	private FriendService friendService;
 
+	@Mock
+	private RealtimeEventPublisher realtimeEventPublisher;
+
 	private BlobService blobService;
 
 	@BeforeEach
 	void setUp() {
-		blobService = new BlobService(blobRepository, mongoTemplate, friendService, 12, 4096, 500);
+		blobService = new BlobService(
+				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, 12, 4096, 500);
 	}
 
 	@Test
@@ -60,6 +65,17 @@ class BlobServiceTest {
 		assertEquals(2, response.accepted());
 		verify(bulkOperations, org.mockito.Mockito.times(2)).upsert(any(), any());
 		verify(bulkOperations).execute();
+		verify(realtimeEventPublisher).blobsAvailable(List.of("friend-a", "friend-b"), "user-1");
+	}
+
+	@Test
+	void arejectedUploadNotifiesNobody() {
+		givenFriends("user-1", "friend-a");
+
+		assertThrows(ApiException.class, () -> blobService.upload("user-1", List.of(
+				new CreateBlobRequest("stranger", "LOCATION", "cipher", 1))));
+
+		verify(realtimeEventPublisher, never()).blobsAvailable(any(), any());
 	}
 
 	@Test
@@ -119,7 +135,8 @@ class BlobServiceTest {
 
 	@Test
 	void uploadRejectsOversizedCiphertext() {
-		blobService = new BlobService(blobRepository, mongoTemplate, friendService, 12, 8, 500);
+		blobService = new BlobService(
+				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, 12, 8, 500);
 		givenFriends("user-1", "friend-a");
 
 		ApiException ex = assertThrows(ApiException.class, () -> blobService.upload("user-1", List.of(
@@ -130,7 +147,8 @@ class BlobServiceTest {
 
 	@Test
 	void uploadRejectsAnOversizedBatch() {
-		blobService = new BlobService(blobRepository, mongoTemplate, friendService, 12, 4096, 1);
+		blobService = new BlobService(
+				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, 12, 4096, 1);
 
 		ApiException ex = assertThrows(ApiException.class, () -> blobService.upload("user-1", List.of(
 				new CreateBlobRequest("friend-a", "LOCATION", "cipher-1", 1),
