@@ -14,6 +14,9 @@ management:
         include: health,info
 
 kismet:
+  security:
+    # Startup fails on development auth settings unless this is explicitly set.
+    allow-insecure-config: ${ALLOW_INSECURE_CONFIG:false}
   jwt:
     secret: ${JWT_SECRET:dev-only-change-me-use-at-least-32-chars!!}
     access-ttl-seconds: ${JWT_ACCESS_TTL:3600}

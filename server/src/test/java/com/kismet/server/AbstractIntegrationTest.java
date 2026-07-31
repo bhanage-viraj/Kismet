@@ -13,7 +13,9 @@ import org.testcontainers.mongodb.MongoDBContainer;
  * Boots the application against a real MongoDB. Unique indexes, upsert-on-slot and TTL are
  * database behaviour, so mocking the repository would assert nothing about them.
  */
-@SpringBootTest
+// Tests deliberately run with Apple signature verification off and the development
+// signing secret, which is exactly what InsecureConfigurationGuard blocks by default.
+@SpringBootTest(properties = "kismet.security.allow-insecure-config=true")
 @AutoConfigureMockMvc
 public abstract class AbstractIntegrationTest {
 
