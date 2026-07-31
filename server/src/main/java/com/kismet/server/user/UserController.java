@@ -6,6 +6,7 @@ import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -34,6 +35,7 @@ public class UserController {
 				authUser.userId(),
 				request.weekdayAvailability(),
 				request.weekendAvailability(),
+				request.timeZoneId(),
 				request.dailyAvailability() == null
 						? null
 						: request.dailyAvailability().stream()
@@ -60,6 +62,25 @@ public class UserController {
 		return MeResponse.from(user);
 	}
 
+	@PutMapping("/me/public-key")
+	public MeResponse updatePublicKey(
+			@AuthenticationPrincipal AuthUser authUser,
+			@RequestBody PublicKeyRequest request) {
+		UserDocument user = userService.updatePublicKey(
+				authUser.userId(),
+				request.publicKey(),
+				request.keyVersion());
+		return MeResponse.from(user);
+	}
+
+	@PutMapping("/me/timezone")
+	public MeResponse updateTimeZone(
+			@AuthenticationPrincipal AuthUser authUser,
+			@RequestBody TimeZoneRequest request) {
+		UserDocument user = userService.updateTimeZone(authUser.userId(), request.timeZoneId());
+		return MeResponse.from(user);
+	}
+
 	public record MeResponse(
 			String id,
 			String displayName,
@@ -68,6 +89,9 @@ public class UserController {
 			String weekdayAvailability,
 			String weekendAvailability,
 			Map<String, UserDocument.AvailabilityWindow> dailyAvailability,
+			String timeZoneId,
+			String publicKey,
+			int keyVersion,
 			boolean onboardingCompleted) {
 
 		static MeResponse from(UserDocument user) {
@@ -79,6 +103,9 @@ public class UserController {
 					user.getWeekdayAvailability(),
 					user.getWeekendAvailability(),
 					user.getDailyAvailability(),
+					user.getTimeZoneId(),
+					user.getPublicKey(),
+					user.getKeyVersion(),
 					user.isOnboardingCompleted());
 		}
 	}
@@ -86,9 +113,16 @@ public class UserController {
 	public record InterestsRequest(List<String> interests) {
 	}
 
+	public record PublicKeyRequest(String publicKey, int keyVersion) {
+	}
+
+	public record TimeZoneRequest(String timeZoneId) {
+	}
+
 	public record AvailabilityRequest(
 			String weekdayAvailability,
 			String weekendAvailability,
+			String timeZoneId,
 			List<DailyAvailabilityRequest> dailyAvailability) {
 	}
 

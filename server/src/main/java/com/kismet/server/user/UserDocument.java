@@ -25,6 +25,13 @@ public class UserDocument {
 	private String customAvailabilityStart;
 	private String customAvailabilityEnd;
 	private Map<String, AvailabilityWindow> dailyAvailability = Map.of();
+	private String timeZoneId;
+
+	/** Base64 X25519 public key. Opaque to the server; never used for any server-side crypto. */
+	private String publicKey;
+
+	private int keyVersion;
+	private Instant keyUpdatedAt;
 	private String refreshTokenHash;
 	private boolean onboardingCompleted;
 	private Instant createdAt;
@@ -108,6 +115,38 @@ public class UserDocument {
 
 	public void setDailyAvailability(Map<String, AvailabilityWindow> dailyAvailability) {
 		this.dailyAvailability = dailyAvailability == null ? Map.of() : Map.copyOf(dailyAvailability);
+	}
+
+	public String getTimeZoneId() {
+		return timeZoneId;
+	}
+
+	public void setTimeZoneId(String timeZoneId) {
+		this.timeZoneId = timeZoneId;
+	}
+
+	public String getPublicKey() {
+		return publicKey;
+	}
+
+	public void setPublicKey(String publicKey) {
+		this.publicKey = publicKey;
+	}
+
+	public int getKeyVersion() {
+		return keyVersion;
+	}
+
+	public void setKeyVersion(int keyVersion) {
+		this.keyVersion = keyVersion;
+	}
+
+	public Instant getKeyUpdatedAt() {
+		return keyUpdatedAt;
+	}
+
+	public void setKeyUpdatedAt(Instant keyUpdatedAt) {
+		this.keyUpdatedAt = keyUpdatedAt;
 	}
 
 	public String getRefreshTokenHash() {
