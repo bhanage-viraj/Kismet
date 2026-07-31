@@ -3,6 +3,7 @@ package com.kismet.server.auth;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Date;
+import java.util.UUID;
 
 import javax.crypto.SecretKey;
 
@@ -67,6 +68,10 @@ public class JwtService {
 		Instant now = Instant.now();
 		return Jwts.builder()
 				.subject(userId)
+				// Timestamps are second-granular, so without a unique id two tokens minted
+				// for the same user in the same second are byte-identical. Refresh rotation
+				// compares hashes, and would then leave the previous token still valid.
+				.id(UUID.randomUUID().toString())
 				.claim(CLAIM_TYPE, type)
 				.issuedAt(Date.from(now))
 				.expiration(Date.from(now.plusSeconds(ttlSeconds)))
