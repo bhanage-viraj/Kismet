@@ -220,6 +220,122 @@ Requires Bearer access token. Active friendships only, each with the friend's pu
 
 Requires Bearer access token. Revokes the friendship in both directions — there is no one-way unfriend. Response `204`. Already-revoked is also `204`; an unknown friendship is `404`.
 
+## Blobs
+
+The server relays opaque ciphertext and never decrypts it or holds key material. For `LOCATION` this collection behaves as a mailbox with one slot per (sender, recipient, kind): re-uploading replaces the previous blob rather than appending.
+
+Blob kinds are `LOCATION`, `AVAILABILITY` and `MESSAGE`, matched case-insensitively.
+
+### `POST /blobs`
+
+Requires Bearer access token. Batched, because one location refresh produces a separate ciphertext per friend.
+
+```json
+{
+  "blobs": [
+    {
+      "recipientUserId": "...",
+      "kind": "LOCATION",
+      "ciphertext": "<sealed payload>",
+      "keyVersion": 3
+    }
+  ]
+}
+```
+
+`keyVersion` is the *recipient's* key version the payload was sealed to, taken from `GET /friends`.
+
+**Response `200`:** `{ "accepted": 1, "expiresAt": "2026-07-31T22:09:30Z" }`
+
+| Case | Status |
+|------|--------|
+| Recipient is not an active friend | `403` |
+| Recipient is yourself | `400` |
+| Same recipient and kind twice in one request | `400` |
+| Unknown kind, blank ciphertext or recipient | `400` |
+| Ciphertext over `BLOB_MAX_CIPHERTEXT_BYTES`, or batch over `BLOB_MAX_BATCH_SIZE` | `413` |
+
+### `GET /blobs/pending`
+
+Requires Bearer access token. Everything addressed to the caller.
+
+```json
+{
+  "blobs": [
+    {
+      "id": "...",
+      "senderUserId": "...",
+      "kind": "LOCATION",
+      "ciphertext": "<sealed payload>",
+      "keyVersion": 3,
+      "updatedAt": "2026-07-31T10:09:30.072Z"
+    }
+  ]
+}
+```
+
+### `POST /blobs/ack`
+
+Requires Bearer access token. Body `{ "blobIds": ["..."] }`, returns `{ "deleted": 1 }`. Optional, since the TTL collects blobs anyway. Deletion is scoped to the caller, so acknowledging cannot destroy blobs addressed to anyone else.
+
+Blobs expire after `BLOB_TTL_HOURS` and are deleted immediately in both directions when a friendship is revoked.
+
+## Map
+
+### `GET /map/friends`
+
+Requires Bearer access token.
+
+**There is no nearby endpoint, by design.** Proximity cannot be computed server-side against ciphertext, so this returns the plaintext half — who is free — and the client intersects it with the location blobs it decrypts locally.
+
+```json
+{
+  "friends": [
+    {
+      "userId": "...",
+      "displayName": "Grace Hopper",
+      "availability": {
+        "status": "FREE",
+        "freeUntil": "2026-07-31T16:00:00Z",
+        "freeFrom": null
+      },
+      "sharedInterests": ["coffee", "gym"],
+      "hasLocationBlob": true,
+      "blobUpdatedAt": "2026-07-31T10:09:53.459Z"
+    }
+  ]
+}
+```
+
+`status` is `FREE`, `BUSY`, or `UNKNOWN` when the friend has no timezone or no availability configured. `freeUntil` is set only when free, `freeFrom` only when busy with free time scheduled within the week ahead.
+
+`blobUpdatedAt` reports when that friend's location blob was last refreshed without revealing anything about its contents, so a client can render "last seen 3 minutes ago" and skip decrypting a blob it already handled.
+
+### `GET /map/friends/{friendUserId}`
+
+Requires Bearer access token. Same shape as one element above. Returns `404` if you are not connected.
+
+## Realtime
+
+STOMP over WebSocket at `ws://<host>/ws`.
+
+The handshake is a plain HTTP upgrade that carries no bearer header, so `/ws/**` is permitted in the HTTP filter chain and authentication happens on the STOMP `CONNECT` frame instead. Send the access token as a native header:
+
+```
+CONNECT
+Authorization: Bearer <accessToken>
+```
+
+A `CONNECT` without a valid access token is rejected. Subscribe to `/user/queue/map`:
+
+```json
+{ "type": "blob.available", "userId": "<sender id>", "at": "2026-07-31T10:09:53Z" }
+```
+
+Event types are `blob.available`, `friend.pair.created` and `friend.pair.revoked`. Blob events are **notifications only** and never carry ciphertext — fetch it with `GET /blobs/pending`.
+
+The broker is in-memory, so this is single-instance only; scaling out means swapping in a Redis or RabbitMQ relay.
+
 ## Errors
 
 ```json
@@ -242,5 +358,8 @@ See `server/.env.example`:
 | `MONGODB_URI` | Default `mongodb://localhost:27017/kismet` |
 | `INVITE_CODE_TTL_MINUTES` | Invite code lifetime, default `60` |
 | `MAX_FRIENDS` | Active friendships per user, default `500` |
+| `BLOB_TTL_HOURS` | How long relayed ciphertext survives, default `12` |
+| `BLOB_MAX_CIPHERTEXT_BYTES` | Per-blob size cap, default `4096` |
+| `BLOB_MAX_BATCH_SIZE` | Blobs per upload, default `500` |
 
 `scripts/smoke-friends.sh` exercises this whole surface end to end against a running server.

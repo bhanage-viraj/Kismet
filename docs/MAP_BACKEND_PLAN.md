@@ -162,21 +162,25 @@ Events to `/user/{id}/queue/map`:
 
 The in-memory broker is correct for one instance and doesn't survive horizontal scaling — that's a Redis/RabbitMQ relay swap later, a config change rather than a redesign.
 
-## 6. Build order
+## 6. Build order and status
 
-Each phase is independently demoable. Don't start one before the previous works end to end.
+**Phase 0 — model prep. Done.** `timeZoneId`, `publicKey`, `keyVersion` on `UserDocument`; `PUT /me/public-key` and `PUT /me/timezone`; `timeZoneId` accepted in `/me/onboarding-complete`; indexes created explicitly at startup by `MongoIndexInitializer`.
 
-**Phase 0 — model prep.** `timeZoneId`, `publicKey`, `keyVersion` on `UserDocument`; `PUT /me/public-key`; accept `timeZoneId` in `/me/onboarding-complete`; index declarations. Small, but everything depends on it.
+**Phase 1 — friend graph. Done.** `FriendPairRepository` queries, `InviteCodeDocument` + repository, `FriendService` (mint, redeem, list, revoke, canonical ordering, self-pair and duplicate rejection, revoke-then-repair reusing the row), `FriendController`.
 
-**Phase 1 — friend graph.** `FriendPairRepository` queries, `InviteCodeDocument` + repository, `FriendService` (mint, redeem, list, revoke, canonical ordering, self-pair and duplicate rejection), `FriendController`. Demo: two accounts pair via a code and see each other's public keys.
+**Phase 2 — blob relay. Done.** `EncryptedBlobRepository` with the unique slot index and TTL, `BlobService` (friendship verification, size and batch caps, bulk upsert), `BlobController`, and read DTOs that actually carry ciphertext. Revoking a friendship deletes blobs in both directions via `FriendRevokedEvent`, rather than waiting out the TTL.
 
-**Phase 2 — blob relay.** `EncryptedBlobRepository` with the upsert index, `BlobService` (friendship verification, size/rate caps), `BlobController`, fixed read DTOs. Demo: account A uploads ciphertext for B, B fetches and decrypts it.
+**Phase 3 — availability fusion. Done.** `AvailabilityEvaluator` plus `GET /map/friends` and `GET /map/friends/{id}`. Wall-clock resolution means windows survive daylight-saving changes; a missing timezone yields `UNKNOWN` rather than a guess.
 
-**Phase 3 — availability fusion.** `AvailabilityEvaluator`, `GET /map/friends`. Demo: the free/busy status is correct across timezones.
+**Phase 4 — realtime. Done.** `WebSocketConfig`, `StompAuthChannelInterceptor`, the `/ws/**` HTTP exemption, and `RealtimeEventPublisher` fanning out `blob.available` and friend-graph events.
 
-**Phase 4 — realtime.** `WebSocketConfig`, STOMP auth interceptor, `/ws/**` exemption, `RealtimeEventPublisher`. Demo: A uploads, B's client is notified without polling.
+**Phase 5 — not started, optional.** APNs proximity alerts — note these must be *computed on-device* and self-scheduled, since the server cannot know who is near whom — and meeting-midpoint suggestions negotiated client-side.
 
-**Phase 5 — optional depth.** APNs proximity alerts (note: these must be *computed on-device* and self-scheduled, since the server can't know who is near whom), meeting-midpoint suggestions negotiated client-side.
+### Not yet built
+
+- **Client-side crypto.** `Core/Crypto/CryptoBox.swift` is still empty, so nothing yet produces a real X25519 key or seals a payload. The server treats keys and ciphertext as opaque strings, which is why the smoke test can exercise the whole relay with placeholder values.
+- **`location_sharing_settings`.** Precision and ghost mode are enforced on the sending client before encryption, since the server cannot inspect coordinates. The synced preferences store described in section 3 is not implemented.
+- **Rate limiting on blob uploads.** Size and batch caps exist; a per-user write frequency limit does not.
 
 ## 7. Testing
 
