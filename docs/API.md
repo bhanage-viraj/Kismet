@@ -338,6 +338,8 @@ The broker is in-memory, so this is single-instance only; scaling out means swap
 
 ## Errors
 
+Every error, including the ones raised by the security filter chain, uses one shape:
+
 ```json
 {
   "status": 401,
@@ -345,6 +347,8 @@ The broker is in-memory, so this is single-instance only; scaling out means swap
   "timestamp": "2026-07-30T00:00:00Z"
 }
 ```
+
+`401` and `403` are not interchangeable here. A missing, malformed or expired access token is always `401`, which is the client's signal to spend its refresh token and retry. `403` means the caller is authenticated but not allowed to touch that resource, such as addressing a blob to someone who is not an active friend; retrying after a refresh will not help.
 
 ## Local config
 
@@ -362,4 +366,14 @@ See `server/.env.example`:
 | `BLOB_MAX_CIPHERTEXT_BYTES` | Per-blob size cap, default `4096` |
 | `BLOB_MAX_BATCH_SIZE` | Blobs per upload, default `500` |
 
-`scripts/smoke-friends.sh` exercises this whole surface end to end against a running server.
+## Tests
+
+`./mvnw test` runs the whole suite. It needs Docker: the integration tests start a real MongoDB via Testcontainers, because the unique slot index, upsert-on-refresh and TTL are database behaviour that a mocked repository would not exercise.
+
+| Scope | Covers |
+|-------|--------|
+| `ApiFlowIntegrationTest` | The HTTP surface end to end: sign in, pair, relay, revoke, and the auth status codes |
+| `MongoIndexIntegrationTest` | Index-level guarantees: duplicate pairs, one blob per slot, recipient-scoped deletes |
+| Service tests | Branching and edge cases per service, with collaborators mocked |
+
+`scripts/smoke-friends.sh` exercises the same surface against an already-running server, which is useful when checking a deployed instance rather than a build.
