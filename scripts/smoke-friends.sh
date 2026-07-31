@@ -24,6 +24,7 @@ sign_in() {
 }
 
 jqr() { python3 -c "import sys,json;d=json.load(sys.stdin);print(eval('d'+sys.argv[1]))" "$1"; }
+jqlen() { python3 -c "import sys,json;d=json.load(sys.stdin);print(len(d[sys.argv[1]]))" "$1"; }
 
 SUFFIX="$(date +%s)"
 echo "== signing in two users =="
@@ -118,6 +119,57 @@ echo "== already-connected redeem is rejected (expect 409) =="
 CODE3=$(auth_a -X POST "$BASE/friends/invite" | jqr "['code']")
 auth_b -o /dev/null -w '%{http_code}\n' -X POST "$BASE/friends/redeem" \
   -H 'Content-Type: application/json' -d "{\"inviteCode\":\"$CODE3\"}"
+
+echo
+echo "== onboarding sets availability and timezone =="
+DAYS='[{"day":"monday","startMinutes":1080,"endMinutes":1440,"busySegments":[]},
+{"day":"tuesday","startMinutes":1080,"endMinutes":1440,"busySegments":[]},
+{"day":"wednesday","startMinutes":1080,"endMinutes":1440,"busySegments":[]},
+{"day":"thursday","startMinutes":1080,"endMinutes":1440,"busySegments":[]},
+{"day":"friday","startMinutes":1080,"endMinutes":1440,"busySegments":[]},
+{"day":"saturday","startMinutes":360,"endMinutes":1440,"busySegments":[]},
+{"day":"sunday","startMinutes":360,"endMinutes":1440,"busySegments":[]}]'
+auth_b -o /dev/null -w 'B onboarding: %{http_code}\n' -X POST "$BASE/me/onboarding-complete" \
+  -H 'Content-Type: application/json' \
+  -d "{\"weekdayAvailability\":\"After 6:00 PM\",\"weekendAvailability\":\"Anytime\",\"timeZoneId\":\"Asia/Singapore\",\"dailyAvailability\":$DAYS}"
+
+echo
+echo "== A uploads an encrypted blob for B =="
+auth_a -X POST "$BASE/blobs" -H 'Content-Type: application/json' \
+  -d "{\"blobs\":[{\"recipientUserId\":\"$B_ID\",\"kind\":\"LOCATION\",\"ciphertext\":\"sealed-payload-v1\",\"keyVersion\":3}]}"
+
+echo
+echo "== A cannot address a blob to a stranger (expect 403) =="
+auth_a -o /dev/null -w '%{http_code}\n' -X POST "$BASE/blobs" \
+  -H 'Content-Type: application/json' \
+  -d '{"blobs":[{"recipientUserId":"000000000000000000000000","kind":"LOCATION","ciphertext":"x","keyVersion":1}]}'
+
+echo
+echo "== B fetches pending blobs (ciphertext must be present) =="
+auth_b "$BASE/blobs/pending"
+
+echo
+echo "== A re-uploads; the slot is replaced, not appended =="
+auth_a -o /dev/null -X POST "$BASE/blobs" -H 'Content-Type: application/json' \
+  -d "{\"blobs\":[{\"recipientUserId\":\"$B_ID\",\"kind\":\"LOCATION\",\"ciphertext\":\"sealed-payload-v2\",\"keyVersion\":3}]}"
+echo -n "blob count for B (expect 1): "
+auth_b "$BASE/blobs/pending" | jqlen blobs
+
+echo
+echo "== B's map view: availability, no coordinates, blob freshness =="
+auth_b "$BASE/map/friends"
+
+echo
+echo "== A's map view of B (B configured availability, so status is real) =="
+auth_a "$BASE/map/friends"
+
+echo
+echo "== revoking deletes the relayed ciphertext =="
+auth_a -o /dev/null -w 'revoke: %{http_code}\n' -X DELETE "$BASE/friends/$B_ID"
+echo -n "B's pending blobs after revoke (expect 0): "
+auth_b "$BASE/blobs/pending" | jqlen blobs
+echo -n "B's map friends after revoke (expect 0): "
+auth_b "$BASE/map/friends" | jqlen friends
 
 echo
 echo "smoke test complete"
