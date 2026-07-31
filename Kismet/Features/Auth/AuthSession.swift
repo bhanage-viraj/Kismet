@@ -24,6 +24,26 @@ final class AuthSession {
 		self.client = client
 	}
 
+	#if DEBUG
+	/// Canvas / Preview host — skips Sign in with Apple and jumps to the signed-in app shell.
+	static func previewSignedIn(
+		displayName: String = "Preview User",
+		interests: [String] = ["coffee", "maps"]
+	) -> AuthSession {
+		let session = AuthSession()
+		session.user = AuthResponseDTO.User(
+			id: "preview-user",
+			displayName: displayName,
+			email: "preview@kismet.local",
+			interests: interests,
+			isNewUser: false,
+			onboardingCompleted: true
+		)
+		session.phase = .signedIn
+		return session
+	}
+	#endif
+
 	func restore() async {
 		phase = .bootstrapping
 		guard KeychainStore.get(.accessToken) != nil, KeychainStore.get(.refreshToken) != nil else {

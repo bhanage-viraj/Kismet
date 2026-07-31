@@ -20,7 +20,22 @@ struct RootView: View {
 	}
 }
 
-#Preview {
-	RootView()
-		.environment(AuthSession())
+#Preview("Signed in") {
+	RootPreviewHost()
+}
+
+private struct RootPreviewHost: View {
+	@State private var authSession = AuthSession.previewSignedIn()
+	@State private var locationManager = VisitLocationManager()
+	@State private var friendsStore = MapFriendsStore()
+
+	var body: some View {
+		RootView()
+			.environment(authSession)
+			.environment(locationManager)
+			.environment(friendsStore)
+			.task {
+				friendsStore.refresh(around: MockFriendsProvider.fallbackCoordinate)
+			}
+	}
 }
