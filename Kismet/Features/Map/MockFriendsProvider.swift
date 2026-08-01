@@ -89,12 +89,23 @@ enum MockFriendsProvider {
 			let distance = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
 				.distance(from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude))
 
+			let presence = PresenceMapping.presence(for: seed.availability)
+			let interests: [String] = {
+				switch seed.id {
+				case "mock-alex", "mock-rohan": ["coffee"]
+				case "mock-sam": ["focus"]
+				default: ["maps"]
+				}
+			}()
+
 			return MapPerson(
 				id: seed.id,
 				displayName: seed.displayName,
 				coordinate: coordinate,
 				availability: seed.availability,
+				presenceState: presence,
 				distanceMeters: distance,
+				sharedInterests: interests,
 				insightSummary: seed.insightSummary,
 				intentLabel: seed.intentLabel,
 				neighborhoodLabel: seed.neighborhoodLabel,

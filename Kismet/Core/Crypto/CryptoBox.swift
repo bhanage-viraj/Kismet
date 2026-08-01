@@ -87,6 +87,42 @@ actor CryptoBox {
 		recipientPublicKeyBase64: String,
 		recipientKeyVersion: Int
 	) throws -> String {
+		try sealJSON(
+			payload,
+			kind: Self.locationKind,
+			senderUserId: senderUserId,
+			recipientUserId: recipientUserId,
+			recipientPublicKeyBase64: recipientPublicKeyBase64,
+			recipientKeyVersion: recipientKeyVersion
+		)
+	}
+
+	func openLocation(
+		ciphertextBase64: String,
+		senderUserId: String,
+		recipientUserId: String,
+		senderPublicKeyBase64: String,
+		recipientKeyVersion: Int
+	) throws -> LocationPayloadDTO {
+		try openJSON(
+			LocationPayloadDTO.self,
+			ciphertextBase64: ciphertextBase64,
+			kind: Self.locationKind,
+			senderUserId: senderUserId,
+			recipientUserId: recipientUserId,
+			senderPublicKeyBase64: senderPublicKeyBase64,
+			recipientKeyVersion: recipientKeyVersion
+		)
+	}
+
+	func sealJSON<T: Encodable>(
+		_ payload: T,
+		kind: String,
+		senderUserId: String,
+		recipientUserId: String,
+		recipientPublicKeyBase64: String,
+		recipientKeyVersion: Int
+	) throws -> String {
 		let privateKey = try loadOrCreatePrivateKey()
 		let recipientPublicKey = try publicKey(from: recipientPublicKeyBase64)
 		let symmetricKey = try deriveSymmetricKey(
@@ -99,6 +135,7 @@ actor CryptoBox {
 
 		let plaintext = try APIConfig.jsonEncoder.encode(payload)
 		let aad = authenticationData(
+			kind: kind,
 			senderUserId: senderUserId,
 			recipientUserId: recipientUserId,
 			recipientKeyVersion: recipientKeyVersion
@@ -114,13 +151,15 @@ actor CryptoBox {
 		}
 	}
 
-	func openLocation(
+	func openJSON<T: Decodable>(
+		_ type: T.Type,
 		ciphertextBase64: String,
+		kind: String,
 		senderUserId: String,
 		recipientUserId: String,
 		senderPublicKeyBase64: String,
 		recipientKeyVersion: Int
-	) throws -> LocationPayloadDTO {
+	) throws -> T {
 		guard let envelope = Data(base64Encoded: ciphertextBase64), envelope.count > 1 else {
 			throw CryptoBoxError.invalidEnvelope
 		}
@@ -141,6 +180,7 @@ actor CryptoBox {
 		)
 
 		let aad = authenticationData(
+			kind: kind,
 			senderUserId: senderUserId,
 			recipientUserId: recipientUserId,
 			recipientKeyVersion: recipientKeyVersion
@@ -149,7 +189,7 @@ actor CryptoBox {
 		do {
 			let sealed = try ChaChaPoly.SealedBox(combined: envelope.dropFirst())
 			let plaintext = try ChaChaPoly.open(sealed, using: symmetricKey, authenticating: aad)
-			return try APIConfig.jsonDecoder.decode(LocationPayloadDTO.self, from: plaintext)
+			return try APIConfig.jsonDecoder.decode(T.self, from: plaintext)
 		} catch {
 			throw CryptoBoxError.openingFailed
 		}
@@ -217,10 +257,11 @@ actor CryptoBox {
 	}
 
 	private func authenticationData(
+		kind: String,
 		senderUserId: String,
 		recipientUserId: String,
 		recipientKeyVersion: Int
 	) -> Data {
-		Data("\(senderUserId)|\(recipientUserId)|\(Self.locationKind)|\(recipientKeyVersion)".utf8)
+		Data("\(senderUserId)|\(recipientUserId)|\(kind)|\(recipientKeyVersion)".utf8)
 	}
 }

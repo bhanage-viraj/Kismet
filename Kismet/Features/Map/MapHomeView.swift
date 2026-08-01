@@ -9,6 +9,8 @@ struct MapHomeView: View {
 	@Environment(FriendsStore.self) private var pairedFriends
 	@Environment(LocationSharingService.self) private var locationSharing
 	@Environment(RealtimeClient.self) private var realtimeClient
+	@Environment(SuggestionEngine.self) private var suggestionEngine
+	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
 
 	@State private var cameraPosition: MapCameraPosition = .region(
 		MKCoordinateRegion(
@@ -69,6 +71,14 @@ struct MapHomeView: View {
 					},
 					onMessage: {
 						showToast("Message \(selected.displayName) — coming soon")
+					},
+					onWeMet: {
+						meetupMemoryStore.markCompleted(
+							friendUserId: selected.id,
+							friendDisplayName: selected.displayName
+						)
+						showToast("Noted — hung out with \(selected.displayName)")
+						Task { await refreshSuggestions() }
 					}
 				)
 				.padding(.horizontal, 18)
@@ -211,6 +221,7 @@ struct MapHomeView: View {
 				switch event.type {
 				case "blob.available":
 					await mapStore.refresh(around: locations.displayCoordinate)
+					await refreshSuggestions()
 				case "friend.pair.created":
 					await socialStore.refresh()
 					await mapStore.refresh(around: locations.displayCoordinate)
@@ -220,12 +231,15 @@ struct MapHomeView: View {
 						friends: socialStore.friends,
 						force: true
 					)
+					await refreshSuggestions()
 				case "friend.pair.revoked":
 					await socialStore.refresh()
 					await mapStore.refresh(around: locations.displayCoordinate)
+					await refreshSuggestions()
 				default:
 					await socialStore.refresh()
 					await mapStore.refresh(around: locations.displayCoordinate)
+					await refreshSuggestions()
 				}
 			}
 		}
@@ -262,11 +276,27 @@ struct MapHomeView: View {
 		recenter(on: locationManager.displayCoordinate)
 		await friendsStore.refresh(around: locationManager.displayCoordinate)
 		publishLocation(force: true)
+		await refreshSuggestions()
 	}
 
 	private func refreshMapData() async {
 		await pairedFriends.refresh()
 		await friendsStore.refresh(around: locationManager.displayCoordinate)
+		await refreshSuggestions()
+	}
+
+	@MainActor
+	private func refreshSuggestions() async {
+		let learned = meetupMemoryStore.buildLearnedSlice()
+		await suggestionEngine.refresh(
+			userId: authSession.user?.id ?? KeychainStore.get(.userId),
+			displayName: authSession.preferredDisplayName,
+			interests: authSession.user?.interests ?? [],
+			coordinate: locationManager.displayCoordinate,
+			placeName: locationManager.displayPlaceName,
+			people: friendsStore.friends,
+			learned: learned
+		)
 	}
 
 	private func publishLocation(force: Bool) {
@@ -316,6 +346,10 @@ private struct MapHomePreviewHost: View {
 	@State private var pairedFriends = FriendsStore.preview()
 	@State private var locationSharing = LocationSharingService()
 	@State private var realtimeClient = RealtimeClient()
+	@State private var suggestionEngine = SuggestionEngine()
+	@State private var meetupMemoryStore = MeetupMemoryStore(
+		container: try! MeetupModelContainer.makeInMemory()
+	)
 
 	var body: some View {
 		MapHomeView()
@@ -325,8 +359,19 @@ private struct MapHomePreviewHost: View {
 			.environment(pairedFriends)
 			.environment(locationSharing)
 			.environment(realtimeClient)
+			.environment(suggestionEngine)
+			.environment(meetupMemoryStore)
 			.task {
 				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
+				await suggestionEngine.refresh(
+					userId: "preview",
+					displayName: "You",
+					interests: ["coffee"],
+					coordinate: MockFriendsProvider.fallbackCoordinate,
+					placeName: "Koramangala",
+					people: friendsStore.friends,
+					learned: meetupMemoryStore.buildLearnedSlice()
+				)
 			}
 	}
 }
