@@ -12,6 +12,8 @@ final class AppEnvironment {
 	let realtimeClient: RealtimeClient
 	let suggestionEngine: SuggestionEngine
 	let pulsePublisher: PulsePublisher
+	let mapWeather: MapWeatherController
+	let weatherObstacles: WeatherObstacleStore
 	let meetupModelContainer: ModelContainer
 	let meetupMemoryStore: MeetupMemoryStore
 
@@ -25,6 +27,8 @@ final class AppEnvironment {
 		realtimeClient: RealtimeClient? = nil,
 		suggestionEngine: SuggestionEngine? = nil,
 		pulsePublisher: PulsePublisher? = nil,
+		mapWeather: MapWeatherController? = nil,
+		weatherObstacles: WeatherObstacleStore? = nil,
 		meetupModelContainer: ModelContainer? = nil
 	) {
 		self.apiClient = apiClient
@@ -36,6 +40,8 @@ final class AppEnvironment {
 		self.realtimeClient = realtimeClient ?? RealtimeClient()
 		self.suggestionEngine = suggestionEngine ?? SuggestionEngine()
 		self.pulsePublisher = pulsePublisher ?? PulsePublisher(client: apiClient)
+		self.mapWeather = mapWeather ?? MapWeatherController()
+		self.weatherObstacles = weatherObstacles ?? WeatherObstacleStore()
 
 		let container: ModelContainer
 		if let meetupModelContainer {

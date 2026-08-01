@@ -126,4 +126,4 @@ Foundation Models reasoning is **proactive suggestion ranking with grounded fact
 6. Elevate Pulse to a real publish/expire/visibility path wired to the Intelligence suggestion CTA.
 7. Ship static widgets (P1) off the shared `SuggestionStore` cache.
 8. App Intents + Shortcuts baseline, iOS-27-gated schema enhancements if demo devices support it.
-9. Buffer + full two-device demo rehearsal (Bump → presence → Intelligence → Pulse → widget → Siri).
+9. Buffer + full two-device demo rehearsal (Bump → presence → Intelligence → Pulse → widget → Siri).    
