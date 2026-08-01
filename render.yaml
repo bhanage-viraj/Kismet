@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: kismet-server
+    runtime: docker
+    rootDir: server
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /actuator/health
+    # The STOMP broker keeps subscriptions in memory, so a second instance would
+    # not see the first one's connections. Keep this at one until the broker is
+    # backed by Redis or RabbitMQ.
+    numInstances: 1
+    envVars:
+      - key: APPLE_CLIENT_ID
+        value: bhanageviraj.Kismet
+      - key: APPLE_VERIFY_TOKEN
+        value: "true"
+      - key: JWT_SECRET
+        sync: false
+      - key: MONGODB_URI
+        sync: false
