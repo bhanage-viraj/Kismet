@@ -69,6 +69,8 @@ struct MainTabView: View {
 	@Environment(SuggestionEngine.self) private var suggestionEngine
 	@Environment(PulsePublisher.self) private var pulsePublisher
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
+	@Environment(MapWeatherController.self) private var mapWeather
+	@Environment(WeatherObstacleStore.self) private var weatherObstacleStore
 
 	@State private var selectedTab: AppTab = .map
 	@State private var insightsDetent: InsightsDetent = .collapsed
@@ -101,6 +103,11 @@ struct MainTabView: View {
 				VStack(spacing: 12) {
 					if showsInsights {
 						insightsAccessory
+							// Track layout bounds before glassEffect (glass can swallow geometry probes).
+							.trackWeatherObstacle(
+								"chrome.insights",
+								cornerRadius: insightsDetent == .collapsed ? 22 : 28
+							)
 							.glassEffect(
 								.regular,
 								in: .rect(cornerRadius: insightsDetent == .collapsed ? 22 : 28)
@@ -111,6 +118,7 @@ struct MainTabView: View {
 					GlassTabBar(selected: $selectedTab)
 						.padding(.horizontal, 10)
 						.padding(.vertical, 10)
+						.trackWeatherObstacle("chrome.tabBar", cornerRadius: .infinity)
 						.glassEffect(.regular, in: .capsule)
 						.glassEffectID("tabbar", in: glassNamespace)
 				}
@@ -118,6 +126,29 @@ struct MainTabView: View {
 			}
 			.animation(.snappy, value: showsInsights)
 			.animation(.snappy, value: insightsDetent)
+
+			if let ctaToast {
+				Text(ctaToast)
+					.font(.footnote.weight(.semibold))
+					.padding(.horizontal, 14)
+					.padding(.vertical, 10)
+					.background(.ultraThinMaterial, in: Capsule())
+					.trackWeatherObstacle("chrome.toast", cornerRadius: .infinity)
+					.padding(.top, 72)
+					.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+					.zIndex(9)
+			}
+
+			MapWeatherOverlay(
+				condition: mapWeather.condition,
+				intensity: mapWeather.intensity,
+				obstacles: weatherObstacleStore.obstacles
+			)
+			.ignoresSafeArea()
+			.zIndex(10)
+		}
+		.onAppear {
+			weatherObstacleStore.remove("chrome.bottomStack")
 		}
 		.onChange(of: selectedTab) { _, _ in
 			insightsDetent = .collapsed
@@ -127,17 +158,14 @@ struct MainTabView: View {
 			insightsDetent = .collapsed
 			dragOffset = 0
 		}
-		.ignoresSafeArea(.keyboard)
-		.overlay(alignment: .top) {
-			if let ctaToast {
-				Text(ctaToast)
-					.font(.footnote.weight(.semibold))
-					.padding(.horizontal, 14)
-					.padding(.vertical, 10)
-					.background(.ultraThinMaterial, in: Capsule())
-					.padding(.top, 72)
+		.onChange(of: showsInsights) { _, show in
+			if !show {
+				weatherObstacleStore.remove("chrome.insights")
 			}
+			// Drop the old full-width stack probe if it was ever registered.
+			weatherObstacleStore.remove("chrome.bottomStack")
 		}
+		.ignoresSafeArea(.keyboard)
 	}
 
 	@ViewBuilder
@@ -389,6 +417,8 @@ private struct MainTabPreviewHost: View {
 	@State private var realtimeClient = RealtimeClient()
 	@State private var suggestionEngine = SuggestionEngine()
 	@State private var pulsePublisher = PulsePublisher()
+	@State private var mapWeather = MapWeatherController()
+	@State private var weatherObstacles = WeatherObstacleStore()
 	@State private var meetupMemoryStore = MeetupMemoryStore(
 		container: try! MeetupModelContainer.makeInMemory()
 	)
@@ -403,6 +433,8 @@ private struct MainTabPreviewHost: View {
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
 			.environment(pulsePublisher)
+			.environment(mapWeather)
+			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
