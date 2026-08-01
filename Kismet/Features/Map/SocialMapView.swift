@@ -200,7 +200,7 @@ private struct SocialMapPreviewHost: View {
 			.environment(locationManager)
 			.environment(friendsStore)
 			.onAppear {
-				friendsStore.refresh(around: MockFriendsProvider.fallbackCoordinate)
+				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 			}
 			.ignoresSafeArea()
 	}

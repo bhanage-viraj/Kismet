@@ -81,6 +81,14 @@ public class UserController {
 		return MeResponse.from(user);
 	}
 
+	@PutMapping("/me/display-name")
+	public MeResponse updateDisplayName(
+			@AuthenticationPrincipal AuthUser authUser,
+			@RequestBody DisplayNameRequest request) {
+		UserDocument user = userService.updateDisplayName(authUser.userId(), request.displayName());
+		return MeResponse.from(user);
+	}
+
 	public record MeResponse(
 			String id,
 			String displayName,
@@ -117,6 +125,9 @@ public class UserController {
 	}
 
 	public record TimeZoneRequest(String timeZoneId) {
+	}
+
+	public record DisplayNameRequest(String displayName) {
 	}
 
 	public record AvailabilityRequest(

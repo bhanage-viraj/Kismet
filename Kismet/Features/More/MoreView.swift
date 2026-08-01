@@ -2,6 +2,10 @@ import SwiftUI
 
 struct MoreView: View {
 	@Environment(AuthSession.self) private var authSession
+	@Environment(FriendsStore.self) private var friendsStore
+	@Environment(MapFriendsStore.self) private var mapFriendsStore
+	@Environment(LocationSharingService.self) private var locationSharing
+	@Environment(RealtimeClient.self) private var realtimeClient
 	var embedded: Bool = false
 
 	var body: some View {
@@ -19,16 +23,30 @@ struct MoreView: View {
 
 	private var listContent: some View {
 		List {
-			Section("Account") {
-				if let user = authSession.user {
-					LabeledContent("Name", value: user.displayName ?? "—")
-					LabeledContent("Email", value: user.email ?? "—")
-				} else {
-					LabeledContent("Name", value: "—")
-					LabeledContent("Email", value: "—")
+			Section("Friends") {
+				NavigationLink {
+					FriendsView()
+				} label: {
+					HStack {
+						Label("Manage friends", systemImage: "person.2.fill")
+						Spacer()
+						if !friendsStore.friends.isEmpty {
+							Text("\(friendsStore.friends.count)")
+								.foregroundStyle(.secondary)
+						}
+					}
 				}
+			}
+
+			Section("Account") {
+				LabeledContent("Name", value: authSession.preferredDisplayName)
+				LabeledContent("Email", value: authSession.user?.email ?? "—")
 				Button("Sign Out", role: .destructive) {
 					Task {
+						realtimeClient.disconnect()
+						locationSharing.stop()
+						friendsStore.reset()
+						mapFriendsStore.reset()
 						await authSession.signOut()
 					}
 				}
@@ -36,10 +54,17 @@ struct MoreView: View {
 		}
 		.scrollContentBackground(embedded ? .hidden : .automatic)
 		.listStyle(.insetGrouped)
+		.task {
+			await friendsStore.refresh()
+		}
 	}
 }
 
 #Preview {
 	MoreView()
 		.environment(AuthSession())
+		.environment(FriendsStore())
+		.environment(MapFriendsStore())
+		.environment(LocationSharingService())
+		.environment(RealtimeClient())
 }

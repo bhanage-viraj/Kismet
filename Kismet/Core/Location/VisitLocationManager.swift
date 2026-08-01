@@ -47,7 +47,7 @@ final class VisitLocationManager: NSObject {
 			return placeName
 		}
 		if isDenied {
-			return "Location off · demo map"
+			return "Location off"
 		}
 		if isUsingFallbackCoordinate {
 			return "Koramangala, Bengaluru"

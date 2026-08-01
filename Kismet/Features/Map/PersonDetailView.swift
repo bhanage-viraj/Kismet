@@ -63,8 +63,10 @@ struct PersonDetailView: View {
 					.font(.subheadline.weight(.medium))
 					.foregroundStyle(.primary.opacity(0.85))
 
-				mutualFriendsRow
-					.padding(.top, 6)
+				if person.mutualFriendCount > 0 {
+					mutualFriendsRow
+						.padding(.top, 6)
+				}
 
 				actionRow
 					.padding(.top, 18)

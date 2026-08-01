@@ -20,9 +20,14 @@ struct InterestsRequestDTO: Encodable {
 	var interests: [String]
 }
 
+struct DisplayNameRequestDTO: Encodable {
+	var displayName: String
+}
+
 struct AvailabilitySetupRequestDTO: Encodable {
 	var weekdayAvailability: String
 	var weekendAvailability: String
+	var timeZoneId: String?
 	var dailyAvailability: [DailyAvailabilityDTO]
 }
 
@@ -59,6 +64,11 @@ struct MeResponseDTO: Decodable {
 	var displayName: String?
 	var email: String?
 	var interests: [String]
+	var weekdayAvailability: String?
+	var weekendAvailability: String?
+	var timeZoneId: String?
+	var publicKey: String?
+	var keyVersion: Int?
 	var onboardingCompleted: Bool
 }
 

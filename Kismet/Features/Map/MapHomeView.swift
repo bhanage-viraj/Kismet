@@ -6,6 +6,9 @@ struct MapHomeView: View {
 	@Environment(AuthSession.self) private var authSession
 	@Environment(VisitLocationManager.self) private var locationManager
 	@Environment(MapFriendsStore.self) private var friendsStore
+	@Environment(FriendsStore.self) private var pairedFriends
+	@Environment(LocationSharingService.self) private var locationSharing
+	@Environment(RealtimeClient.self) private var realtimeClient
 
 	@State private var cameraPosition: MapCameraPosition = .region(
 		MKCoordinateRegion(
@@ -18,9 +21,7 @@ struct MapHomeView: View {
 	@State private var didCenterOnUser = false
 
 	private var displayName: String {
-		authSession.user?.displayName
-			?? authSession.user?.email
-			?? "Kismet"
+		authSession.preferredDisplayName
 	}
 
 	private var locationSubtitle: String {
@@ -80,13 +81,21 @@ struct MapHomeView: View {
 		}
 		.animation(.spring(response: 0.34, dampingFraction: 0.86), value: friendsStore.selectedFriendID)
 		.task {
-			await bootstrapMap()
+			await runMapSession()
 		}
 		.onChange(of: locationManager.hasFix) { _, hasFix in
 			guard hasFix, !didCenterOnUser else { return }
 			recenter(on: locationManager.displayCoordinate)
-			friendsStore.refresh(around: locationManager.displayCoordinate)
+			Task { await friendsStore.refresh(around: locationManager.displayCoordinate) }
+			publishLocation(force: true)
 			didCenterOnUser = true
+		}
+		.onChange(of: locationManager.userLocation?.timestamp) { _, _ in
+			publishLocation(force: false)
+		}
+		.onChange(of: pairedFriends.graphRevision) { _, _ in
+			publishLocation(force: true)
+			Task { await friendsStore.refresh(around: locationManager.displayCoordinate) }
 		}
 		.overlay(alignment: .top) {
 			if let ctaToast {
@@ -168,7 +177,7 @@ struct MapHomeView: View {
 			VStack(alignment: .leading, spacing: 2) {
 				Text("Location is off")
 					.font(.subheadline.weight(.semibold))
-				Text("Showing a demo map near Koramangala.")
+				Text("Enable location to share your pin and see friends nearby.")
 					.font(.caption)
 					.foregroundStyle(.secondary)
 			}
@@ -188,14 +197,85 @@ struct MapHomeView: View {
 	}
 
 	@MainActor
+	private func runMapSession() async {
+		locationSharing.start()
+
+		let mapStore = friendsStore
+		let socialStore = pairedFriends
+		let locations = locationManager
+		let sharing = locationSharing
+		let realtime = realtimeClient
+
+		realtime.onMapEvent = { event in
+			Task { @MainActor in
+				switch event.type {
+				case "blob.available":
+					await mapStore.refresh(around: locations.displayCoordinate)
+				case "friend.pair.created":
+					await socialStore.refresh()
+					await mapStore.refresh(around: locations.displayCoordinate)
+					sharing.shareIfNeeded(
+						location: locations.userLocation,
+						senderUserId: KeychainStore.get(.userId),
+						friends: socialStore.friends,
+						force: true
+					)
+				case "friend.pair.revoked":
+					await socialStore.refresh()
+					await mapStore.refresh(around: locations.displayCoordinate)
+				default:
+					await socialStore.refresh()
+					await mapStore.refresh(around: locations.displayCoordinate)
+				}
+			}
+		}
+		realtime.connect()
+
+		defer {
+			realtime.onMapEvent = nil
+			realtime.disconnect()
+			sharing.stop()
+		}
+
+		await bootstrapMap()
+		guard !Task.isCancelled else { return }
+
+		while !Task.isCancelled {
+			do {
+				try await Task.sleep(for: .seconds(30))
+			} catch {
+				break
+			}
+			guard !Task.isCancelled else { break }
+			await refreshMapData()
+		}
+	}
+
+	@MainActor
 	private func bootstrapMap() async {
-		friendsStore.refresh(around: locationManager.displayCoordinate)
 		locationManager.prepareForMapAppearance()
+		await pairedFriends.refresh()
+		await friendsStore.refresh(around: locationManager.displayCoordinate)
 
 		try? await Task.sleep(for: .milliseconds(50))
 		guard !Task.isCancelled else { return }
 		recenter(on: locationManager.displayCoordinate)
-		friendsStore.refresh(around: locationManager.displayCoordinate)
+		await friendsStore.refresh(around: locationManager.displayCoordinate)
+		publishLocation(force: true)
+	}
+
+	private func refreshMapData() async {
+		await pairedFriends.refresh()
+		await friendsStore.refresh(around: locationManager.displayCoordinate)
+	}
+
+	private func publishLocation(force: Bool) {
+		locationSharing.shareIfNeeded(
+			location: locationManager.userLocation,
+			senderUserId: authSession.user?.id ?? KeychainStore.get(.userId),
+			friends: pairedFriends.friends,
+			force: force
+		)
 	}
 
 	private func recenter(on coordinate: CLLocationCoordinate2D) {
@@ -233,14 +313,20 @@ private struct MapHomePreviewHost: View {
 	@State private var authSession = AuthSession.previewSignedIn()
 	@State private var locationManager = VisitLocationManager()
 	@State private var friendsStore = MapFriendsStore()
+	@State private var pairedFriends = FriendsStore.preview()
+	@State private var locationSharing = LocationSharingService()
+	@State private var realtimeClient = RealtimeClient()
 
 	var body: some View {
 		MapHomeView()
 			.environment(authSession)
 			.environment(locationManager)
 			.environment(friendsStore)
+			.environment(pairedFriends)
+			.environment(locationSharing)
+			.environment(realtimeClient)
 			.task {
-				friendsStore.refresh(around: MockFriendsProvider.fallbackCoordinate)
+				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 			}
 	}
 }

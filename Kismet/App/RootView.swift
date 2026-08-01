@@ -27,15 +27,21 @@ struct RootView: View {
 private struct RootPreviewHost: View {
 	@State private var authSession = AuthSession.previewSignedIn()
 	@State private var locationManager = VisitLocationManager()
-	@State private var friendsStore = MapFriendsStore()
+	@State private var mapFriendsStore = MapFriendsStore()
+	@State private var friendsStore = FriendsStore.preview()
+	@State private var locationSharing = LocationSharingService()
+	@State private var realtimeClient = RealtimeClient()
 
 	var body: some View {
 		RootView()
 			.environment(authSession)
 			.environment(locationManager)
+			.environment(mapFriendsStore)
 			.environment(friendsStore)
+			.environment(locationSharing)
+			.environment(realtimeClient)
 			.task {
-				friendsStore.refresh(around: MockFriendsProvider.fallbackCoordinate)
+				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 			}
 	}
 }
