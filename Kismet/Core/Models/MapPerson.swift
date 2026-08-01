@@ -8,11 +8,7 @@ enum MapAvailability: String, Codable, Hashable, Sendable {
 	case unknown
 
 	var statusColor: Color {
-		switch self {
-		case .free: KismetTheme.Status.free
-		case .busy: KismetTheme.Status.busy
-		case .unknown: KismetTheme.Status.unknown
-		}
+		PresenceMapping.presence(for: self).statusColor
 	}
 }
 
@@ -21,7 +17,9 @@ struct MapPerson: Identifiable, Hashable, Sendable {
 	let displayName: String
 	var coordinate: CLLocationCoordinate2D
 	var availability: MapAvailability
+	var presenceState: PresenceState
 	var distanceMeters: CLLocationDistance
+	var sharedInterests: [String]
 	var insightSummary: String
 	var intentLabel: String
 	var neighborhoodLabel: String
@@ -31,6 +29,9 @@ struct MapPerson: Identifiable, Hashable, Sendable {
 	var ctaSystemImage: String
 
 	var formattedDistance: String {
+		if !presenceState.showsPreciseLocation {
+			return "Nearby"
+		}
 		if distanceMeters < 1000 {
 			return "\(Int(distanceMeters.rounded()))m away"
 		}
@@ -39,6 +40,7 @@ struct MapPerson: Identifiable, Hashable, Sendable {
 	}
 
 	var formattedWalkingMinutes: String {
+		guard presenceState.showsPreciseLocation else { return "Nearby" }
 		let minutes = max(1, Int((distanceMeters / 80).rounded()))
 		return "\(minutes) mins away"
 	}

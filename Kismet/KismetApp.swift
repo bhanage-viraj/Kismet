@@ -5,6 +5,7 @@
 //  Created by Viraj Bhanage on 29/07/26.
 //
 
+import SwiftData
 import SwiftUI
 
 @main
@@ -15,6 +16,11 @@ struct KismetApp: App {
 	@State private var friendsStore = AppEnvironment.shared.friendsStore
 	@State private var locationSharing = AppEnvironment.shared.locationSharing
 	@State private var realtimeClient = AppEnvironment.shared.realtimeClient
+	@State private var suggestionEngine = AppEnvironment.shared.suggestionEngine
+	@State private var pulsePublisher = AppEnvironment.shared.pulsePublisher
+	@State private var meetupMemoryStore = AppEnvironment.shared.meetupMemoryStore
+
+	private let meetupContainer = AppEnvironment.shared.meetupModelContainer
 
 	var body: some Scene {
 		WindowGroup {
@@ -25,6 +31,10 @@ struct KismetApp: App {
 				.environment(friendsStore)
 				.environment(locationSharing)
 				.environment(realtimeClient)
+				.environment(suggestionEngine)
+				.environment(pulsePublisher)
+				.environment(meetupMemoryStore)
+				.modelContainer(meetupContainer)
 				.task {
 					await authSession.restore()
 				}

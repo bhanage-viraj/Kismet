@@ -64,16 +64,26 @@ private enum InsightsDetent: Int, CaseIterable, Comparable {
 
 struct MainTabView: View {
 	@Environment(MapFriendsStore.self) private var friendsStore
+	@Environment(FriendsStore.self) private var pairedFriends
+	@Environment(AuthSession.self) private var authSession
+	@Environment(SuggestionEngine.self) private var suggestionEngine
+	@Environment(PulsePublisher.self) private var pulsePublisher
+	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
 
 	@State private var selectedTab: AppTab = .map
 	@State private var insightsDetent: InsightsDetent = .collapsed
 	@State private var dragOffset: CGFloat = 0
 	@State private var ctaToast: String?
+	@State private var recordedShownCardIDs: Set<String> = []
 	@Namespace private var glassNamespace
 
 	/// Insights accessory sits above the tab pill (Map only, no person detail).
 	private var showsInsights: Bool {
 		selectedTab == .map && friendsStore.selectedFriend == nil
+	}
+
+	private var suggestionCards: [SuggestionCard] {
+		suggestionEngine.store.cards
 	}
 
 	private var expandedContentHeight: CGFloat {
@@ -143,13 +153,32 @@ struct MainTabView: View {
 					.gesture(insightsDragGesture)
 			} else {
 				AIContextInsightsView(
-					friends: friendsStore.friends,
+					cards: suggestionCards,
+					statusMessage: suggestionEngine.store.statusMessage,
 					showsHeader: true,
-					onSelectFriend: { friend in
-						friendsStore.select(friend.id)
+					onSelectFriend: { card in
+						friendsStore.select(card.friendID)
 					},
-					onCTA: { friend in
-						showToast("\(friend.ctaTitle) — coming soon")
+					onCTA: { card in
+						Task { await sendPulse(for: card) }
+					},
+					onDismiss: { card in
+						recordFeedback(card, action: .dismissed)
+						suggestionEngine.store.replace(
+							cards: suggestionCards.filter { $0.id != card.id },
+							usedModel: suggestionEngine.store.usedFoundationModels,
+							status: suggestionEngine.store.statusMessage
+						)
+						showToast("Dismissed \(card.displayName)")
+					},
+					onFeedback: { card, action in
+						recordFeedback(card, action: action)
+						showToast(action == .up ? "Thanks — noted" : "Got it — will tune suggestions")
+					},
+					onAppearCard: { card in
+						guard !recordedShownCardIDs.contains(card.id) else { return }
+						recordedShownCardIDs.insert(card.id)
+						recordFeedback(card, action: .shown)
 					}
 				)
 				.frame(height: expandedContentHeight)
@@ -209,10 +238,15 @@ struct MainTabView: View {
 	}
 
 	private var accessorySubtitle: String {
-		let count = friendsStore.friends.count
-		if count == 0 { return "Nothing nearby right now" }
-		if count == 1 { return "1 nearby" }
-		return "\(count) nearby"
+		let count = suggestionCards.count
+		if count == 0 {
+			return suggestionEngine.store.statusMessage ?? "Nothing nearby right now"
+		}
+		if count == 1 {
+			let name = suggestionCards[0].displayName
+			return "\(name) — tap to reconnect"
+		}
+		return "\(count) suggestions"
 	}
 
 	private var insightsDragGesture: some Gesture {
@@ -272,6 +306,38 @@ struct MainTabView: View {
 			}
 		}
 	}
+
+	@MainActor
+	private func sendPulse(for card: SuggestionCard) async {
+		do {
+			let pulse = try await pulsePublisher.send(
+				from: card,
+				senderUserId: authSession.user?.id ?? KeychainStore.get(.userId),
+				friends: pairedFriends.friends
+			)
+			recordFeedback(card, action: .cta)
+			meetupMemoryStore.recordMeetup(
+				friendUserId: card.friendID,
+				friendDisplayName: card.displayName,
+				venueName: card.venueName,
+				source: .pulse,
+				outcome: .pending
+			)
+			let venue = card.venueName.map { " · \($0)" } ?? ""
+			showToast("Pulse sent to \(card.displayName)\(venue)")
+			_ = pulse
+		} catch {
+			showToast((error as? LocalizedError)?.errorDescription ?? "Couldn't send Pulse")
+		}
+	}
+
+	private func recordFeedback(_ card: SuggestionCard, action: SuggestionFeedbackAction) {
+		meetupMemoryStore.recordFeedback(
+			friendUserId: card.friendID,
+			action: action,
+			reasonCodes: card.reasonCodes.map(\.rawValue)
+		)
+	}
 }
 
 // MARK: - Tab bar content (glass capsule is applied by parent)
@@ -321,6 +387,11 @@ private struct MainTabPreviewHost: View {
 	@State private var friendsStore = FriendsStore.preview()
 	@State private var locationSharing = LocationSharingService()
 	@State private var realtimeClient = RealtimeClient()
+	@State private var suggestionEngine = SuggestionEngine()
+	@State private var pulsePublisher = PulsePublisher()
+	@State private var meetupMemoryStore = MeetupMemoryStore(
+		container: try! MeetupModelContainer.makeInMemory()
+	)
 
 	var body: some View {
 		MainTabView()
@@ -330,8 +401,20 @@ private struct MainTabPreviewHost: View {
 			.environment(friendsStore)
 			.environment(locationSharing)
 			.environment(realtimeClient)
+			.environment(suggestionEngine)
+			.environment(pulsePublisher)
+			.environment(meetupMemoryStore)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
+				await suggestionEngine.refresh(
+					userId: "preview",
+					displayName: "You",
+					interests: ["coffee"],
+					coordinate: MockFriendsProvider.fallbackCoordinate,
+					placeName: "Koramangala",
+					people: mapFriendsStore.friends,
+					learned: .empty
+				)
 			}
 	}
 }

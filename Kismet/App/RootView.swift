@@ -31,6 +31,8 @@ private struct RootPreviewHost: View {
 	@State private var friendsStore = FriendsStore.preview()
 	@State private var locationSharing = LocationSharingService()
 	@State private var realtimeClient = RealtimeClient()
+	@State private var suggestionEngine = SuggestionEngine()
+	@State private var pulsePublisher = PulsePublisher()
 
 	var body: some View {
 		RootView()
@@ -40,6 +42,8 @@ private struct RootPreviewHost: View {
 			.environment(friendsStore)
 			.environment(locationSharing)
 			.environment(realtimeClient)
+			.environment(suggestionEngine)
+			.environment(pulsePublisher)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 			}

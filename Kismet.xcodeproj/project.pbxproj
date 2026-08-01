@@ -415,8 +415,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to understand when you are free and suggest better times to meet friends.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to find free windows for spontaneous meetups.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kismet uses your location to show you on the map and surface friends who are nearby right now.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Kismet uses motion to avoid suggesting meetups while you're driving.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -451,8 +452,9 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to understand when you are free and suggest better times to meet friends.";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to find free windows for spontaneous meetups.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kismet uses your location to show you on the map and surface friends who are nearby right now.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "Kismet uses motion to avoid suggesting meetups while you're driving.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

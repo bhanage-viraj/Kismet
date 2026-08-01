@@ -129,15 +129,19 @@ final class MapFriendsStore {
 			from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
 		)
 		let availability = friend.availability.status.mapAvailability
+		let presence = PresenceState.from(availabilityStatus: friend.availability.status)
 		let walking = formattedWalkingMinutes(distanceMeters: distance)
-		let interests = friend.sharedInterests.prefix(2).joined(separator: ", ")
+		let interestsList = Array(friend.sharedInterests.prefix(4))
+		let interests = interestsList.prefix(2).joined(separator: ", ")
 
 		return MapPerson(
 			id: friend.userId,
 			displayName: friend.displayName?.isEmpty == false ? (friend.displayName ?? "Friend") : "Friend",
 			coordinate: coordinate,
 			availability: availability,
+			presenceState: presence,
 			distanceMeters: distance,
+			sharedInterests: interestsList,
 			insightSummary: insightSummary(
 				availability: friend.availability,
 				walking: walking,

@@ -3,10 +3,14 @@ import SwiftUI
 struct AIContextInsightsView: View {
 	@Environment(\.colorScheme) private var colorScheme
 
-	let friends: [MapPerson]
+	let cards: [SuggestionCard]
+	var statusMessage: String?
 	var showsHeader: Bool = true
-	var onSelectFriend: (MapPerson) -> Void = { _ in }
-	var onCTA: (MapPerson) -> Void = { _ in }
+	var onSelectFriend: (SuggestionCard) -> Void = { _ in }
+	var onCTA: (SuggestionCard) -> Void = { _ in }
+	var onDismiss: (SuggestionCard) -> Void = { _ in }
+	var onFeedback: (SuggestionCard, SuggestionFeedbackAction) -> Void = { _, _ in }
+	var onAppearCard: (SuggestionCard) -> Void = { _ in }
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -27,7 +31,15 @@ struct AIContextInsightsView: View {
 				.padding(.bottom, 12)
 			}
 
-			if friends.isEmpty {
+			if let statusMessage, !statusMessage.isEmpty, cards.isEmpty {
+				ContentUnavailableView(
+					"No nearby context yet",
+					systemImage: "sparkles",
+					description: Text(statusMessage)
+				)
+				.frame(maxWidth: .infinity, minHeight: 120)
+				.padding(.horizontal, 16)
+			} else if cards.isEmpty {
 				ContentUnavailableView(
 					"No nearby context yet",
 					systemImage: "sparkles",
@@ -38,12 +50,22 @@ struct AIContextInsightsView: View {
 			} else {
 				ScrollView {
 					LazyVStack(spacing: 12) {
-						ForEach(friends) { friend in
+						if let statusMessage, !statusMessage.isEmpty {
+							Text(statusMessage)
+								.font(.caption)
+								.foregroundStyle(.secondary)
+								.frame(maxWidth: .infinity, alignment: .leading)
+						}
+
+						ForEach(cards) { card in
 							InsightCard(
-								person: friend,
-								onSelect: { onSelectFriend(friend) },
-								onCTA: { onCTA(friend) }
+								card: card,
+								onSelect: { onSelectFriend(card) },
+								onCTA: { onCTA(card) },
+								onDismiss: { onDismiss(card) },
+								onFeedback: { action in onFeedback(card, action) }
 							)
+							.onAppear { onAppearCard(card) }
 						}
 					}
 					.padding(.horizontal, 16)
@@ -61,9 +83,11 @@ struct AIContextInsightsView: View {
 private struct InsightCard: View {
 	@Environment(\.colorScheme) private var colorScheme
 
-	let person: MapPerson
+	let card: SuggestionCard
 	var onSelect: () -> Void
 	var onCTA: () -> Void
+	var onDismiss: () -> Void
+	var onFeedback: (SuggestionFeedbackAction) -> Void
 
 	var body: some View {
 		VStack(alignment: .leading, spacing: 10) {
@@ -73,12 +97,12 @@ private struct InsightCard: View {
 						avatar
 
 						VStack(alignment: .leading, spacing: 2) {
-							Text(person.displayName)
+							Text(card.displayName)
 								.font(.body.weight(.semibold))
 								.foregroundStyle(KismetTheme.Insight.titleColor(for: colorScheme))
 								.lineLimit(1)
 
-							Text(person.formattedDistance)
+							Text(card.formattedDistance)
 								.font(.caption)
 								.foregroundStyle(KismetTheme.Insight.bodyColor(for: colorScheme))
 								.lineLimit(1)
@@ -92,17 +116,17 @@ private struct InsightCard: View {
 
 				Button(action: onCTA) {
 					HStack(spacing: 6) {
-						Image(systemName: person.ctaSystemImage)
+						Image(systemName: card.ctaSystemImage)
 							.font(.caption.weight(.semibold))
-						Text(person.ctaTitle)
+						Text(card.ctaTitle)
 							.font(.caption.weight(.semibold))
 							.lineLimit(1)
 					}
 					.padding(.horizontal, 12)
 					.padding(.vertical, 10)
-					.foregroundStyle(KismetTheme.Insight.ctaForeground(for: person.availability))
+					.foregroundStyle(KismetTheme.Insight.ctaForeground(for: card.availability))
 					.background(
-						KismetTheme.Insight.ctaBackground(for: person.availability),
+						KismetTheme.Insight.ctaBackground(for: card.availability),
 						in: Capsule()
 					)
 				}
@@ -110,15 +134,66 @@ private struct InsightCard: View {
 				.fixedSize(horizontal: true, vertical: false)
 			}
 
+			if !card.factChips.isEmpty {
+				ScrollView(.horizontal, showsIndicators: false) {
+					HStack(spacing: 6) {
+						ForEach(card.factChips, id: \.self) { chip in
+							Text(chip)
+								.font(.caption2.weight(.medium))
+								.padding(.horizontal, 8)
+								.padding(.vertical, 5)
+								.background(.quaternary.opacity(0.5), in: Capsule())
+						}
+					}
+				}
+			}
+
 			Button(action: onSelect) {
-				Text(person.insightSummary)
-					.font(.subheadline)
-					.foregroundStyle(KismetTheme.Insight.bodyColor(for: colorScheme))
-					.multilineTextAlignment(.leading)
-					.lineLimit(3)
-					.frame(maxWidth: .infinity, alignment: .leading)
+				VStack(alignment: .leading, spacing: 4) {
+					Text(card.reason)
+						.font(.subheadline)
+						.foregroundStyle(KismetTheme.Insight.bodyColor(for: colorScheme))
+						.multilineTextAlignment(.leading)
+						.lineLimit(3)
+
+					if let venue = card.venueName {
+						Text(venueETALabel(venue))
+							.font(.caption.weight(.semibold))
+							.foregroundStyle(KismetTheme.Status.free)
+					}
+				}
+				.frame(maxWidth: .infinity, alignment: .leading)
 			}
 			.buttonStyle(.plain)
+
+			HStack(spacing: 16) {
+				Button {
+					onFeedback(.up)
+				} label: {
+					Label("Helpful", systemImage: "hand.thumbsup")
+						.font(.caption.weight(.medium))
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(.secondary)
+
+				Button {
+					onFeedback(.down)
+				} label: {
+					Label("Not now", systemImage: "hand.thumbsdown")
+						.font(.caption.weight(.medium))
+				}
+				.buttonStyle(.plain)
+				.foregroundStyle(.secondary)
+
+				Spacer(minLength: 0)
+
+				Button(action: onDismiss) {
+					Text("Dismiss")
+						.font(.caption.weight(.semibold))
+						.foregroundStyle(.secondary)
+				}
+				.buttonStyle(.plain)
+			}
 		}
 		.padding(14)
 		.background(
@@ -127,9 +202,16 @@ private struct InsightCard: View {
 		)
 	}
 
+	private func venueETALabel(_ venue: String) -> String {
+		if let minutes = card.venueETAMinutes {
+			return "\(venue) · \(minutes) min"
+		}
+		return venue
+	}
+
 	private var avatar: some View {
 		ZStack(alignment: .bottomTrailing) {
-			Image(systemName: person.accentSystemImage)
+			Image(systemName: "person.crop.circle.fill")
 				.resizable()
 				.scaledToFit()
 				.foregroundStyle(.white)
@@ -139,12 +221,12 @@ private struct InsightCard: View {
 					height: KismetTheme.Insight.cardAvatarSize
 				)
 				.background(
-					KismetTheme.Map.ring(for: person.availability).gradient,
+					KismetTheme.Map.ring(for: card.availability).gradient,
 					in: Circle()
 				)
 
 			Circle()
-				.fill(person.availability.statusColor)
+				.fill(card.presence.statusColor)
 				.frame(width: 10, height: 10)
 				.overlay {
 					Circle().stroke(
@@ -158,11 +240,57 @@ private struct InsightCard: View {
 }
 
 #Preview("Light") {
-	AIContextInsightsView(friends: MockFriendsProvider.friends(around: MockFriendsProvider.fallbackCoordinate))
-		.preferredColorScheme(.light)
+	AIContextInsightsView(
+		cards: FallbackComposer.cards(
+			from: OpportunityRanker().rank(
+				context: previewContext
+			)
+		)
+	)
+	.preferredColorScheme(.light)
 }
 
 #Preview("Dark") {
-	AIContextInsightsView(friends: MockFriendsProvider.friends(around: MockFriendsProvider.fallbackCoordinate))
-		.preferredColorScheme(.dark)
+	AIContextInsightsView(
+		cards: FallbackComposer.cards(
+			from: OpportunityRanker().rank(
+				context: previewContext
+			)
+		)
+	)
+	.preferredColorScheme(.dark)
+}
+
+private var previewContext: KismetContext {
+	let people = MockFriendsProvider.friends(around: MockFriendsProvider.fallbackCoordinate)
+	return KismetContext(
+		generatedAt: Date(),
+		user: UserContextSlice(
+			userId: "me",
+			displayName: "You",
+			interests: ["coffee"],
+			coordinate: MockFriendsProvider.fallbackCoordinate,
+			placeName: "Koramangala",
+			freeUntil: nil,
+			isBusyNow: false
+		),
+		friends: people.map {
+			FriendPresence(
+				id: $0.id,
+				displayName: $0.displayName,
+				coordinate: $0.coordinate,
+				presence: $0.presenceState,
+				distanceMeters: $0.distanceMeters,
+				sharedInterests: $0.sharedInterests,
+				freeUntil: nil,
+				freeFrom: nil,
+				lastSeenAt: nil,
+				locationAccuracy: nil
+			)
+		},
+		calendar: CalendarSlice(isBusyNow: false, nextFreeAt: nil, freeUntil: nil),
+		motion: MotionSlice(activity: .walking),
+		focus: FocusSlice(blocksSocial: false, label: nil),
+		learned: .empty
+	)
 }
