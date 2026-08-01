@@ -1,12 +1,10 @@
 import Foundation
 
 enum APIConfig {
-	#if targetEnvironment(simulator)
-	static let baseURL = URL(string: "http://localhost:8080")!
-	#else
-	/// ngrok tunnel for physical-device development.
-	static let baseURL = URL(string: "https://bristleless-nonhygroscopic-hans.ngrok-free.dev")!
-	#endif
+	/// The hosted backend, reachable from both the Simulator and a physical device.
+	/// Point this at `http://localhost:8080` to work against a server running locally,
+	/// which also needs `APPLE_VERIFY_TOKEN=false` on that server for Simulator sign-in.
+	static let baseURL = URL(string: "https://kismet-4kbu.onrender.com")!
 
 	static let jsonDecoder: JSONDecoder = {
 		let decoder = JSONDecoder()

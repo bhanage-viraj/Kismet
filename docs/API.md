@@ -1,5 +1,6 @@
 # Kismet API
 
+Base URL (hosted): `https://kismet-4kbu.onrender.com`
 Base URL (local): `http://localhost:8080`
 
 Auth uses Bearer JWT access tokens. Refresh tokens are opaque JWTs stored hashed server-side.
