@@ -356,6 +356,7 @@ See `server/.env.example`:
 
 | Variable | Notes |
 |----------|--------|
+| `ALLOW_INSECURE_CONFIG` | Permits the development auth settings below. Without it the server refuses to start on them |
 | `APPLE_CLIENT_ID` | Must match iOS bundle ID (`bhanageviraj.Kismet`) for native Sign in with Apple |
 | `APPLE_VERIFY_TOKEN` | `false` only for local Simulator demos; production must be `true` |
 | `JWT_SECRET` | At least 32 characters |
@@ -376,4 +377,10 @@ See `server/.env.example`:
 | `MongoIndexIntegrationTest` | Index-level guarantees: duplicate pairs, one blob per slot, recipient-scoped deletes |
 | Service tests | Branching and edge cases per service, with collaborators mocked |
 
-`scripts/smoke-friends.sh` exercises the same surface against an already-running server, which is useful when checking a deployed instance rather than a build.
+`scripts/smoke-friends.sh` exercises the same surface against an already-running server, which is useful when checking a deployed instance rather than a build. Start that server with `ALLOW_INSECURE_CONFIG=true`, since the script signs in with unverified identity tokens.
+
+## Startup safety check
+
+`APPLE_VERIFY_TOKEN=false` and the development `JWT_SECRET` both fail open: the first accepts any unsigned identity token carrying a `sub` claim, and the second lets anyone holding the source mint access tokens for any account. Either one turns a forgotten environment variable into a full authentication bypass on an otherwise healthy-looking server.
+
+`InsecureConfigurationGuard` therefore aborts startup when it finds them, reporting every problem at once, unless `ALLOW_INSECURE_CONFIG=true` opts in for local work.

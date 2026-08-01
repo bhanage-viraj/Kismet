@@ -1,0 +1,5 @@
+target/
+.env
+.git
+docker-compose.yml
+*.md
