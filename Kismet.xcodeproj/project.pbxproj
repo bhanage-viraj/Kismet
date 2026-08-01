@@ -411,10 +411,12 @@
 				CODE_SIGN_ENTITLEMENTS = Kismet/Resources/Kismet.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = JMN9RWVFLZ;
+				DEVELOPMENT_TEAM = 84Q3MJ58NW;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to understand when you are free and suggest better times to meet friends.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kismet uses your location to show you on the map and surface friends who are nearby right now.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -425,7 +427,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.Kismet;
+				PRODUCT_BUNDLE_IDENTIFIER = sanjivanand.kismet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -445,10 +447,12 @@
 				CODE_SIGN_ENTITLEMENTS = Kismet/Resources/Kismet.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = JMN9RWVFLZ;
+				DEVELOPMENT_TEAM = 84Q3MJ58NW;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to understand when you are free and suggest better times to meet friends.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kismet uses your location to show you on the map and surface friends who are nearby right now.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -459,7 +463,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.Kismet;
+				PRODUCT_BUNDLE_IDENTIFIER = sanjivanand.kismet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
