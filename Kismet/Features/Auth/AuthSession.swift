@@ -24,6 +24,37 @@ final class AuthSession {
 		self.client = client
 	}
 
+	/// Name for chrome (map header, More). Never falls back to the raw email address.
+	var preferredDisplayName: String {
+		if let name = Self.normalizedName(user?.displayName) {
+			return name
+		}
+		if let name = Self.normalizedName(KeychainStore.get(.cachedDisplayName)) {
+			return name
+		}
+		return "You"
+	}
+
+	#if DEBUG
+	/// Canvas / Preview host — skips Sign in with Apple and jumps to the signed-in app shell.
+	static func previewSignedIn(
+		displayName: String = "Preview User",
+		interests: [String] = ["coffee", "maps"]
+	) -> AuthSession {
+		let session = AuthSession()
+		session.user = AuthResponseDTO.User(
+			id: "preview-user",
+			displayName: displayName,
+			email: "preview@kismet.local",
+			interests: interests,
+			isNewUser: false,
+			onboardingCompleted: true
+		)
+		session.phase = .signedIn
+		return session
+	}
+	#endif
+
 	func restore() async {
 		phase = .bootstrapping
 		guard KeychainStore.get(.accessToken) != nil, KeychainStore.get(.refreshToken) != nil else {
@@ -34,37 +65,29 @@ final class AuthSession {
 
 		do {
 			try await loadMe()
+			await publishEncryptionKeyIfNeeded()
 			await checkAppleCredentialState()
 		} catch {
 			let refreshed = (try? await client.refreshTokens()) ?? false
 			if refreshed {
 				do {
 					try await loadMe()
+					await publishEncryptionKeyIfNeeded()
 					await checkAppleCredentialState()
 				} catch {
-					KeychainStore.clearAuth()
-					user = nil
-					phase = .signedOut
+					clearAuthState()
 				}
 			} else {
-				KeychainStore.clearAuth()
-				user = nil
-				phase = .signedOut
+				clearAuthState()
 			}
 		}
 	}
 
 	private func loadMe() async throws {
 		let me: MeResponseDTO = try await client.get("/me")
-		user = AuthResponseDTO.User(
-			id: me.id,
-			displayName: me.displayName,
-			email: me.email,
-			interests: me.interests,
-			isNewUser: false,
-			onboardingCompleted: me.onboardingCompleted
-		)
+		applyUser(from: me, isNewUser: false)
 		phase = me.onboardingCompleted ? .signedIn : .needsOnboarding
+		await syncDisplayNameIfNeeded()
 	}
 
 	func handleSignInCompletion(_ result: Result<ASAuthorization, Error>) async {
@@ -90,11 +113,13 @@ final class AuthSession {
 			isSigningIn = true
 			defer { isSigningIn = false }
 
+			cacheAppleDisplayName(from: credential.fullName)
+
 			var fullName: AppleAuthRequestDTO.FullName?
 			if let nameComponents = credential.fullName {
 				let given = nameComponents.givenName
 				let family = nameComponents.familyName
-				if given != nil || family != nil {
+				if Self.normalizedName(given) != nil || Self.normalizedName(family) != nil {
 					fullName = .init(givenName: given, familyName: family)
 				}
 			}
@@ -118,7 +143,12 @@ final class AuthSession {
 				try KeychainStore.set(credential.user, for: .appleUserId)
 
 				user = response.user
+				if let name = Self.normalizedName(response.user.displayName) {
+					try? KeychainStore.set(name, for: .cachedDisplayName)
+				}
 				phase = phaseAfterSignIn(onboardingCompleted: response.user.onboardingCompleted)
+				await syncDisplayNameIfNeeded()
+				await publishEncryptionKeyIfNeeded()
 			} catch {
 				lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 			}
@@ -137,7 +167,7 @@ final class AuthSession {
 				body: InterestsRequestDTO(interests: interests),
 				authorized: true
 			)
-			updateUser(from: me)
+			applyUser(from: me, isNewUser: false)
 			return true
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -157,8 +187,10 @@ final class AuthSession {
 				body: availability,
 				authorized: true
 			)
-			updateUser(from: me)
+			applyUser(from: me, isNewUser: false)
 			phase = .signedIn
+			await syncDisplayNameIfNeeded()
+			await publishEncryptionKeyIfNeeded()
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
@@ -168,24 +200,69 @@ final class AuthSession {
 		if KeychainStore.get(.accessToken) != nil {
 			try? await client.postEmpty("/auth/logout")
 		}
-		KeychainStore.clearAuth()
-		user = nil
-		phase = .signedOut
+		await CryptoBox.shared.clearLocalKeys()
+		clearAuthState()
 	}
 
 	func clearError() {
 		lastErrorMessage = nil
 	}
 
-	private func updateUser(from me: MeResponseDTO) {
+	private func applyUser(from me: MeResponseDTO, isNewUser: Bool) {
 		user = AuthResponseDTO.User(
 			id: me.id,
-			displayName: me.displayName,
+			displayName: Self.normalizedName(me.displayName),
 			email: me.email,
 			interests: me.interests,
-			isNewUser: false,
+			isNewUser: isNewUser,
 			onboardingCompleted: me.onboardingCompleted
 		)
+		if let name = Self.normalizedName(me.displayName) {
+			try? KeychainStore.set(name, for: .cachedDisplayName)
+		}
+	}
+
+	/// If the server never got Apple's one-time name, push the locally cached name up.
+	private func syncDisplayNameIfNeeded() async {
+		guard Self.normalizedName(user?.displayName) == nil,
+		      let cached = Self.normalizedName(KeychainStore.get(.cachedDisplayName))
+		else {
+			return
+		}
+
+		do {
+			let me: MeResponseDTO = try await client.put(
+				"/me/display-name",
+				body: DisplayNameRequestDTO(displayName: cached)
+			)
+			applyUser(from: me, isNewUser: false)
+		} catch {
+			// Keep showing the cached name locally even if sync fails.
+		}
+	}
+
+	private func cacheAppleDisplayName(from nameComponents: PersonNameComponents?) {
+		guard let nameComponents else { return }
+		let formatter = PersonNameComponentsFormatter()
+		let formatted = formatter.string(from: nameComponents)
+			.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard let name = Self.normalizedName(formatted) else { return }
+		try? KeychainStore.set(name, for: .cachedDisplayName)
+	}
+
+	private func publishEncryptionKeyIfNeeded() async {
+		do {
+			_ = try await CryptoBox.shared.ensurePublished(using: client)
+		} catch {
+			lastErrorMessage = (error as? LocalizedError)?.errorDescription
+				?? error.localizedDescription
+		}
+	}
+
+	private func clearAuthState() {
+		KeychainStore.clearAuth()
+		user = nil
+		phase = .signedOut
 	}
 
 	private func phaseAfterSignIn(onboardingCompleted: Bool) -> Phase {
@@ -213,5 +290,14 @@ final class AuthSession {
 				}
 			}
 		}
+	}
+
+	private static func normalizedName(_ value: String?) -> String? {
+		guard let value else { return nil }
+		let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return nil }
+		// Guard against older clients / bad data that stored an email in displayName.
+		if trimmed.contains("@") { return nil }
+		return trimmed
 	}
 }

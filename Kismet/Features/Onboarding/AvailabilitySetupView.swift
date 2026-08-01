@@ -249,6 +249,7 @@ struct AvailabilitySetupView: View {
 			AvailabilitySetupRequestDTO(
 				weekdayAvailability: weekdayAvailability,
 				weekendAvailability: weekendAvailability,
+				timeZoneId: TimeZone.current.identifier,
 				dailyAvailability: dailyWindows.map {
 					DailyAvailabilityDTO(
 						day: $0.day.rawValue,

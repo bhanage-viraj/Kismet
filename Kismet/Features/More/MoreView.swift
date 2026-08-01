@@ -2,23 +2,60 @@ import SwiftUI
 
 struct MoreView: View {
 	@Environment(AuthSession.self) private var authSession
+	@Environment(FriendsStore.self) private var friendsStore
+	@Environment(MapFriendsStore.self) private var mapFriendsStore
+	@Environment(LocationSharingService.self) private var locationSharing
+	@Environment(RealtimeClient.self) private var realtimeClient
+	var embedded: Bool = false
 
 	var body: some View {
-		NavigationStack {
-			List {
-				Section("Account") {
-					if let user = authSession.user {
-						LabeledContent("Name", value: user.displayName ?? "—")
-						LabeledContent("Email", value: user.email ?? "—")
-					}
-					Button("Sign Out", role: .destructive) {
-						Task {
-							await authSession.signOut()
+		Group {
+			if embedded {
+				listContent
+			} else {
+				NavigationStack {
+					listContent
+						.navigationTitle("More")
+				}
+			}
+		}
+	}
+
+	private var listContent: some View {
+		List {
+			Section("Friends") {
+				NavigationLink {
+					FriendsView()
+				} label: {
+					HStack {
+						Label("Manage friends", systemImage: "person.2.fill")
+						Spacer()
+						if !friendsStore.friends.isEmpty {
+							Text("\(friendsStore.friends.count)")
+								.foregroundStyle(.secondary)
 						}
 					}
 				}
 			}
-			.navigationTitle("More")
+
+			Section("Account") {
+				LabeledContent("Name", value: authSession.preferredDisplayName)
+				LabeledContent("Email", value: authSession.user?.email ?? "—")
+				Button("Sign Out", role: .destructive) {
+					Task {
+						realtimeClient.disconnect()
+						locationSharing.stop()
+						friendsStore.reset()
+						mapFriendsStore.reset()
+						await authSession.signOut()
+					}
+				}
+			}
+		}
+		.scrollContentBackground(embedded ? .hidden : .automatic)
+		.listStyle(.insetGrouped)
+		.task {
+			await friendsStore.refresh()
 		}
 	}
 }
@@ -26,4 +63,8 @@ struct MoreView: View {
 #Preview {
 	MoreView()
 		.environment(AuthSession())
+		.environment(FriendsStore())
+		.environment(MapFriendsStore())
+		.environment(LocationSharingService())
+		.environment(RealtimeClient())
 }

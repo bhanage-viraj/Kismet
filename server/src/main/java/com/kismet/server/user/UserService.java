@@ -28,6 +28,7 @@ public class UserService {
 	private static final Set<String> DAYS = Set.of(
 			"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday");
 	private static final int MAX_PUBLIC_KEY_LENGTH = 256;
+	private static final int MAX_DISPLAY_NAME_LENGTH = 80;
 
 	private final UserRepository userRepository;
 
@@ -136,6 +137,20 @@ public class UserService {
 	public UserDocument updateTimeZone(String userId, String timeZoneId) {
 		UserDocument user = requireById(userId);
 		user.setTimeZoneId(normalizeTimeZoneId(timeZoneId));
+		return save(user);
+	}
+
+	public UserDocument updateDisplayName(String userId, String displayName) {
+		if (displayName == null || displayName.isBlank()) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Display name is required");
+		}
+		String trimmed = displayName.trim();
+		if (trimmed.length() > MAX_DISPLAY_NAME_LENGTH) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Display name is too long");
+		}
+
+		UserDocument user = requireById(userId);
+		user.setDisplayName(trimmed);
 		return save(user);
 	}
 

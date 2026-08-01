@@ -7,6 +7,10 @@ enum KeychainStore {
 		case refreshToken
 		case userId
 		case appleUserId
+		/// Apple only shares the person's name on the first authorization — keep a local copy.
+		case cachedDisplayName
+		case x25519PrivateKey
+		case x25519KeyVersion
 	}
 
 	static func set(_ value: String, for key: Key) throws {
@@ -60,6 +64,11 @@ enum KeychainStore {
 		delete(.refreshToken)
 		delete(.userId)
 		delete(.appleUserId)
+	}
+
+	static func clearCryptoKeys() {
+		delete(.x25519PrivateKey)
+		delete(.x25519KeyVersion)
 	}
 
 	enum KeychainError: Error {

@@ -96,8 +96,25 @@ actor APIClient {
 		try await request(method: "POST", path: path, body: body, authorized: authorized)
 	}
 
+	func post<T: Decodable>(_ path: String, authorized: Bool = true) async throws -> T {
+		try await request(method: "POST", path: path, body: nil as String?, authorized: authorized)
+	}
+
 	func get<T: Decodable>(_ path: String, authorized: Bool = true) async throws -> T {
 		try await request(method: "GET", path: path, authorized: authorized)
+	}
+
+	func put<T: Decodable>(_ path: String, body: some Encodable, authorized: Bool = true) async throws -> T {
+		try await request(method: "PUT", path: path, body: body, authorized: authorized)
+	}
+
+	func deleteEmpty(_ path: String, authorized: Bool = true) async throws {
+		let _: EmptyResponse = try await request(
+			method: "DELETE",
+			path: path,
+			body: nil as String?,
+			authorized: authorized
+		)
 	}
 
 	func postEmpty(_ path: String, authorized: Bool = true) async throws {
