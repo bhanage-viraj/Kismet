@@ -13,6 +13,9 @@ struct ContentView: View {
 	}
 }
 
+// The preview helpers below are DEBUG-only, so the preview must be too —
+// otherwise a Release build fails on symbols that were compiled out.
+#if DEBUG
 #Preview("Signed in") {
 	SignedInPreviewHost()
 }
@@ -38,3 +41,4 @@ private struct SignedInPreviewHost: View {
 			}
 	}
 }
+#endif

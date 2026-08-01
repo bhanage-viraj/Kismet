@@ -22,7 +22,7 @@ kismet:
     access-ttl-seconds: ${JWT_ACCESS_TTL:3600}
     refresh-ttl-seconds: ${JWT_REFRESH_TTL:2592000}
   apple:
-    client-id: ${APPLE_CLIENT_ID:bhanageviraj.Kismet}
+    client-id: ${APPLE_CLIENT_ID:bhanageviraj.Yuti}
     verify-token: ${APPLE_VERIFY_TOKEN:false}
   cors:
     origins: ${CORS_ORIGINS:*}

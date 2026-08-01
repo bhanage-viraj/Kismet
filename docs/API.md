@@ -358,7 +358,7 @@ See `server/.env.example`:
 | Variable | Notes |
 |----------|--------|
 | `ALLOW_INSECURE_CONFIG` | Permits the development auth settings below. Without it the server refuses to start on them |
-| `APPLE_CLIENT_ID` | Must match iOS bundle ID (`bhanageviraj.Kismet`) for native Sign in with Apple |
+| `APPLE_CLIENT_ID` | Must match iOS bundle ID (`bhanageviraj.Yuti`) for native Sign in with Apple |
 | `APPLE_VERIFY_TOKEN` | `false` only for local Simulator demos; production must be `true` |
 | `JWT_SECRET` | At least 32 characters |
 | `MONGODB_URI` | Default `mongodb://localhost:27017/kismet` |

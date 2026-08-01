@@ -336,6 +336,9 @@ struct MapHomeView: View {
 	}
 }
 
+// The preview helpers below are DEBUG-only, so the preview must be too —
+// otherwise a Release build fails on symbols that were compiled out.
+#if DEBUG
 #Preview("Light") {
 	MapHomePreviewHost()
 		.preferredColorScheme(.light)
@@ -386,3 +389,4 @@ private struct MapHomePreviewHost: View {
 			}
 	}
 }
+#endif
