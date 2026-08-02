@@ -416,6 +416,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = indeKismet;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "indeKismet uses your calendar to find free windows for spontaneous meetups.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "indeKismet uses your location to show you on the map and surface friends who are nearby right now.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "indeKismet uses motion to avoid suggesting meetups while you're driving.";
@@ -454,6 +455,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = indeKismet;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "indeKismet uses your calendar to find free windows for spontaneous meetups.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "indeKismet uses your location to show you on the map and surface friends who are nearby right now.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "indeKismet uses motion to avoid suggesting meetups while you're driving.";
