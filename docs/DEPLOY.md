@@ -27,7 +27,7 @@ Then set the production variables (Railway → Variables, or via CLI):
 railway variables set \
   JWT_SECRET='<output of: openssl rand -base64 48>' \
   APPLE_VERIFY_TOKEN=true \
-  APPLE_CLIENT_ID=bhanageviraj.Yuti \
+  APPLE_CLIENT_ID=bhanageviraj.indeKismet \
   MONGODB_URI='mongodb+srv://USER:PASS@CLUSTER/kismet?retryWrites=true&w=majority' \
   CORS_ORIGINS='*'
 ```

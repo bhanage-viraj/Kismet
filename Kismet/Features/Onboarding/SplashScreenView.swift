@@ -65,7 +65,7 @@ struct SplashScreenView: View {
 
     private var brand: some View {
         ZStack {
-            Text("Kismet")
+            Text("indeKismet")
                 .font(.system(size: 58, weight: .bold, design: .rounded))
                 .fontWidth(.expanded)
                 .tracking(1.2)
@@ -85,7 +85,7 @@ struct SplashScreenView: View {
         }
         .frame(width: 320, height: 96)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Kismet")
+        .accessibilityLabel("indeKismet")
     }
 
     private var tagline: some View {

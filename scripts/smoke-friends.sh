@@ -12,7 +12,7 @@ fake_apple_token() {
   local sub="$1"
   local header payload
   header=$(b64url '{"alg":"none","typ":"JWT"}')
-  payload=$(b64url "{\"sub\":\"$sub\",\"aud\":\"bhanageviraj.Yuti\",\"email\":\"$sub@example.com\",\"exp\":4102444800}")
+  payload=$(b64url "{\"sub\":\"$sub\",\"aud\":\"bhanageviraj.indeKismet\",\"email\":\"$sub@example.com\",\"exp\":4102444800}")
   printf '%s.%s.sig' "$header" "$payload"
 }
 

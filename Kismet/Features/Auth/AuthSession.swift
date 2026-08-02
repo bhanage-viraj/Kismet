@@ -45,7 +45,7 @@ final class AuthSession {
 		session.user = AuthResponseDTO.User(
 			id: "preview-user",
 			displayName: displayName,
-			email: "preview@kismet.local",
+			email: "preview@indekismet.local",
 			interests: interests,
 			isNewUser: false,
 			onboardingCompleted: true
