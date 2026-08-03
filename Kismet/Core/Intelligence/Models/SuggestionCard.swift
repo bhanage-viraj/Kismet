@@ -19,13 +19,15 @@ struct SuggestionCard: Identifiable, Sendable {
 	var confidence: Double
 	var urgency: SuggestionUrgency
 	var isModelGenerated: Bool
+	/// Optional JPEG/PNG bytes for the friend avatar. When set, widgets persist this into the App Group.
+	var avatarImageData: Data? = nil
 
 	var formattedDistance: String {
 		if !presence.showsPreciseLocation { return "Nearby" }
 		if distanceMeters < 1000 {
-			return "\(Int(distanceMeters.rounded()))m away"
+			return "\(Int(distanceMeters.rounded())) m away"
 		}
-		return String(format: "%.1fkm away", distanceMeters / 1000)
+		return String(format: "%.1f km away", distanceMeters / 1000)
 	}
 }
 

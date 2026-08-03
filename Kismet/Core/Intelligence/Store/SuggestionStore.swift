@@ -19,6 +19,7 @@ final class SuggestionStore {
 		self.usedFoundationModels = usedModel
 		self.statusMessage = status
 		self.lastUpdatedAt = Date()
+		SuggestionSnapshotWriter.persist(cards: self.cards, updatedAt: self.lastUpdatedAt ?? Date())
 	}
 
 	func reset() {
@@ -26,5 +27,6 @@ final class SuggestionStore {
 		lastUpdatedAt = nil
 		statusMessage = nil
 		usedFoundationModels = false
+		SuggestionSnapshotWriter.clear()
 	}
 }
