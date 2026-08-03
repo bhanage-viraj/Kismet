@@ -11,8 +11,11 @@ services:
     numInstances: 1
     envVars:
       - key: APPLE_CLIENT_ID
-        value: bhanageviraj.indeKismet
+        # Comma-separated: your build + teammate build (Apple JWT aud = bundle ID).
+        value: bhanageviraj.indeKismet,sanjivanand.IndeKismet
       - key: APPLE_VERIFY_TOKEN
+        value: "true"
+      - key: DEV_SEED_ENABLED
         value: "true"
       - key: JWT_SECRET
         sync: false
