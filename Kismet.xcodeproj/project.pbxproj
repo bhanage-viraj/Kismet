@@ -518,9 +518,11 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to find free windows for spontaneous meetups.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kismet uses your location to show you on the map and surface friends who are nearby right now.";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Kismet uses motion to avoid suggesting meetups while you're driving.";
+				INFOPLIST_KEY_CFBundleDisplayName = indeKismet;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "indeKismet uses your calendar to find free windows for spontaneous meetups.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "indeKismet uses your location to show you on the map and surface friends who are nearby right now.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "indeKismet uses motion to avoid suggesting meetups while you're driving.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -532,7 +534,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sanjivanand.IndeKismet;
+				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -558,9 +560,11 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
-				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "Kismet uses your calendar to find free windows for spontaneous meetups.";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Kismet uses your location to show you on the map and surface friends who are nearby right now.";
-				INFOPLIST_KEY_NSMotionUsageDescription = "Kismet uses motion to avoid suggesting meetups while you're driving.";
+				INFOPLIST_KEY_CFBundleDisplayName = indeKismet;
+				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "indeKismet uses your calendar to find free windows for spontaneous meetups.";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "indeKismet uses your location to show you on the map and surface friends who are nearby right now.";
+				INFOPLIST_KEY_NSMotionUsageDescription = "indeKismet uses motion to avoid suggesting meetups while you're driving.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -572,7 +576,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = sanjivanand.IndeKismet;
+				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -595,7 +599,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.KismetTests;
+				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismetTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -617,7 +621,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 26.4;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.KismetTests;
+				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismetTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -637,7 +641,7 @@
 				DEVELOPMENT_TEAM = JMN9RWVFLZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.KismetUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismetUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -657,7 +661,7 @@
 				DEVELOPMENT_TEAM = JMN9RWVFLZ;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.KismetUITests;
+				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismetUITests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

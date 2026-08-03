@@ -174,6 +174,9 @@ private struct YouPinLabel: View {
 	}
 }
 
+// loadPreviewMocks is DEBUG-only, so the preview must be too — otherwise a
+// Release build fails on a symbol that was compiled out.
+#if DEBUG
 #Preview("Light") {
 	SocialMapPreviewHost()
 		.preferredColorScheme(.light)
@@ -205,3 +208,4 @@ private struct SocialMapPreviewHost: View {
 			.ignoresSafeArea()
 	}
 }
+#endif

@@ -36,7 +36,7 @@ class AuthServiceTest {
 	@BeforeEach
 	void setUp() {
 		jwtService = new JwtService("dev-only-change-me-use-at-least-32-chars!!", 3600, 2592000);
-		appleTokenVerifier = new AppleTokenVerifier("bhanageviraj.Kismet", false);
+		appleTokenVerifier = new AppleTokenVerifier("bhanageviraj.indeKismet", false);
 		authService = new AuthService(appleTokenVerifier, jwtService, userService);
 	}
 
@@ -59,7 +59,7 @@ class AuthServiceTest {
 		when(userService.save(any(UserDocument.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
 		AppleAuthRequest request = new AppleAuthRequest();
-		request.setIdentityToken(fakeAppleToken("apple-sub-1", "bhanageviraj.Kismet", "ada@example.com"));
+		request.setIdentityToken(fakeAppleToken("apple-sub-1", "bhanageviraj.indeKismet", "ada@example.com"));
 		AppleAuthRequest.FullName name = new AppleAuthRequest.FullName();
 		name.setGivenName("Ada");
 		name.setFamilyName("Lovelace");

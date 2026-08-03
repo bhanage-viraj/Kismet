@@ -7,6 +7,19 @@ enum APIClientError: LocalizedError {
 	case decoding(Error)
 	case unauthorized
 
+	/// True only when the server rejected the credentials. A timeout or a 5xx says
+	/// nothing about whether the session is still good.
+	var isCredentialRejection: Bool {
+		switch self {
+		case .unauthorized:
+			return true
+		case .httpStatus(let code, _):
+			return code == 401
+		default:
+			return false
+		}
+	}
+
 	var errorDescription: String? {
 		switch self {
 		case .invalidURL:
@@ -145,7 +158,12 @@ actor APIClient {
 			try KeychainStore.set(response.user.id, for: .userId)
 			return true
 		} catch {
-			KeychainStore.clearAuth()
+			// Only the server rejecting the refresh token means the session is gone.
+			// Discarding credentials on a timeout turns a brief outage into a forced
+			// sign-in, and the tokens are still good on the next attempt.
+			if (error as? APIClientError)?.isCredentialRejection == true {
+				KeychainStore.clearAuth()
+			}
 			return false
 		}
 	}

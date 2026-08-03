@@ -18,7 +18,7 @@ enum KeychainStore {
 		let query: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrAccount as String: key.rawValue,
-			kSecAttrService as String: "com.kismet.app.auth",
+			kSecAttrService as String: "com.indekismet.app.auth",
 		]
 
 		SecItemDelete(query as CFDictionary)
@@ -37,7 +37,7 @@ enum KeychainStore {
 		let query: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrAccount as String: key.rawValue,
-			kSecAttrService as String: "com.kismet.app.auth",
+			kSecAttrService as String: "com.indekismet.app.auth",
 			kSecReturnData as String: true,
 			kSecMatchLimit as String: kSecMatchLimitOne,
 		]
@@ -54,7 +54,7 @@ enum KeychainStore {
 		let query: [String: Any] = [
 			kSecClass as String: kSecClassGenericPassword,
 			kSecAttrAccount as String: key.rawValue,
-			kSecAttrService as String: "com.kismet.app.auth",
+			kSecAttrService as String: "com.indekismet.app.auth",
 		]
 		SecItemDelete(query as CFDictionary)
 	}

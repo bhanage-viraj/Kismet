@@ -187,6 +187,9 @@ private struct FriendRowView: View {
 	}
 }
 
+// FriendsStore.preview is DEBUG-only, so the preview must be too — otherwise a
+// Release build fails on a symbol that was compiled out.
+#if DEBUG
 #Preview {
 	NavigationStack {
 		FriendsView()
@@ -205,3 +208,4 @@ private struct FriendRowView: View {
 		),
 	]))
 }
+#endif

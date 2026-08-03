@@ -45,7 +45,7 @@ final class AuthSession {
 		session.user = AuthResponseDTO.User(
 			id: "preview-user",
 			displayName: displayName,
-			email: "preview@kismet.local",
+			email: "preview@indekismet.local",
 			interests: interests,
 			isNewUser: false,
 			onboardingCompleted: true
@@ -75,12 +75,26 @@ final class AuthSession {
 					await publishEncryptionKeyIfNeeded()
 					await checkAppleCredentialState()
 				} catch {
-					clearAuthState()
+					endRestore(after: error)
 				}
 			} else {
-				clearAuthState()
+				endRestore(after: error)
 			}
 		}
+	}
+
+	/// `refreshTokens()` drops the stored credentials when the server rejects them, so
+	/// a surviving refresh token means restore failed for some other reason — an
+	/// unreachable server, most likely. Keep it: the session is probably still valid,
+	/// and wiping it here is what turns one bad launch into a sign-in every launch.
+	private func endRestore(after error: Error) {
+		guard KeychainStore.get(.refreshToken) != nil else {
+			clearAuthState()
+			return
+		}
+		user = nil
+		phase = .signedOut
+		lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 	}
 
 	private func loadMe() async throws {
@@ -281,9 +295,13 @@ final class AuthSession {
 			provider.getCredentialState(forUserID: appleUserId) { state, _ in
 				Task { @MainActor in
 					switch state {
-					case .revoked, .notFound:
+					case .revoked:
 						await self.signOut()
 					default:
+						// `.notFound` also means "this credential isn't associated with
+						// this App ID", which is what a bundle identifier change looks
+						// like. Too weak a signal to tear down a session the server
+						// still accepts.
 						break
 					}
 					continuation.resume()
