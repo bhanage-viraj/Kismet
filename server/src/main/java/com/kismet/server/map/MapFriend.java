@@ -9,6 +9,9 @@ import com.kismet.server.availability.AvailabilitySnapshot;
  * A friend as the map sees them. Deliberately carries no coordinates: the server only
  * reports that a location blob exists and when it was last refreshed, and the client joins
  * that against the ciphertext it decrypts locally.
+ * <p>
+ * {@code isTestSeed} marks backend-seeded demo friends that have no E2EE location blob;
+ * the client may place a synthetic pin for those only.
  */
 public record MapFriend(
 		String userId,
@@ -16,5 +19,6 @@ public record MapFriend(
 		AvailabilitySnapshot availability,
 		List<String> sharedInterests,
 		boolean hasLocationBlob,
-		Instant blobUpdatedAt) {
+		Instant blobUpdatedAt,
+		boolean isTestSeed) {
 }

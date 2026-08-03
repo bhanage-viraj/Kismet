@@ -28,6 +28,16 @@ enum PresenceState: String, Codable, Hashable, Sendable, CaseIterable {
 		}
 	}
 
+	/// Spoken / Siri-facing label (never reveals Eclipse).
+	var spokenLabel: String {
+		switch self {
+		case .available: "available"
+		case .friendsOnly: "busy with friends only"
+		case .approximate: "nearby"
+		case .eclipse: "unavailable"
+		}
+	}
+
 	var statusColor: Color {
 		switch self {
 		case .available: KismetTheme.Status.free

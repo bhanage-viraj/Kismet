@@ -64,13 +64,15 @@ public class MapService {
 	}
 
 	private MapFriend toMapFriend(UserDocument viewer, UserDocument friend, Instant blobUpdatedAt, Instant now) {
+		boolean testSeed = friend.getAppleSub() != null && friend.getAppleSub().startsWith("dev.test.");
 		return new MapFriend(
 				friend.getId(),
 				friend.getDisplayName(),
 				availabilityEvaluator.evaluate(friend, now),
 				sharedInterests(viewer, friend),
 				blobUpdatedAt != null,
-				blobUpdatedAt);
+				blobUpdatedAt,
+				testSeed);
 	}
 
 	/**

@@ -19,6 +19,7 @@ final class SuggestionStore {
 		self.usedFoundationModels = usedModel
 		self.statusMessage = status
 		self.lastUpdatedAt = Date()
+		Task { await FriendSpotlightIndexer.reindex() }
 	}
 
 	func reset() {
@@ -26,5 +27,6 @@ final class SuggestionStore {
 		lastUpdatedAt = nil
 		statusMessage = nil
 		usedFoundationModels = false
+		Task { await FriendSpotlightIndexer.reindex() }
 	}
 }

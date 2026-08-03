@@ -73,6 +73,7 @@ class MapServiceTest {
 		assertEquals(List.of("coffee"), mapFriend.sharedInterests());
 		assertTrue(mapFriend.hasLocationBlob());
 		assertEquals(Instant.parse("2026-07-31T06:40:00Z"), mapFriend.blobUpdatedAt());
+		assertFalse(mapFriend.isTestSeed());
 	}
 
 	@Test

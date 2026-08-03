@@ -13,8 +13,15 @@ struct MapFriendDTO: Decodable, Sendable, Identifiable {
 	var sharedInterests: [String]
 	var hasLocationBlob: Bool
 	var blobUpdatedAt: Date?
+	/// Backend-seeded demo friends (no E2EE location). Optional for older API responses.
+	var isTestSeed: Bool?
 
 	var id: String { userId }
+
+	var isDemoFriend: Bool {
+		if isTestSeed == true { return true }
+		return displayName?.hasSuffix(" (Test)") == true
+	}
 }
 
 struct AvailabilitySnapshotDTO: Decodable, Sendable {

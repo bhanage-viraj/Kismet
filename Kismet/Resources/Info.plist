@@ -4,6 +4,20 @@
 <dict>
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
+	<!-- Shorter spoken names for Siri App Shortcuts (\(.applicationName) resolves these too). -->
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Kismet</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>kiz-met</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Orbit</string>
+		</dict>
+	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

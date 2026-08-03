@@ -52,7 +52,7 @@ actor APIClient {
 		authorized: Bool = true,
 		retryOnUnauthorized: Bool = true
 	) async throws -> T {
-		let url = APIConfig.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
+		let url = Self.makeURL(path: path)
 		var request = URLRequest(url: url)
 		request.httpMethod = method
 		request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -166,6 +166,16 @@ actor APIClient {
 			}
 			return false
 		}
+	}
+
+	/// Builds `baseURL` + path without percent-encoding `/` inside the path
+	/// (`appendingPathComponent` would turn `friends/invite` into `friends%2Finvite`).
+	private static func makeURL(path: String) -> URL {
+		let trimmed = path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+		guard !trimmed.isEmpty else { return APIConfig.baseURL }
+		var base = APIConfig.baseURL.absoluteString
+		if base.hasSuffix("/") { base.removeLast() }
+		return URL(string: base + "/" + trimmed)!
 	}
 }
 

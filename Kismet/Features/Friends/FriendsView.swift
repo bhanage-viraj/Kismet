@@ -94,6 +94,19 @@ struct FriendsView: View {
 			}
 
 			Section {
+				Button {
+					Task { await friendsStore.seedTestFriend() }
+				} label: {
+					Label("Add Alex (Test) from backend", systemImage: "person.badge.plus")
+				}
+				.disabled(friendsStore.isMutating)
+			} header: {
+				Text("Demo")
+			} footer: {
+				Text("Creates a synthetic friend on the server so you can test Siri and the map without a second device.")
+			}
+
+			Section {
 				if friendsStore.isLoading && friendsStore.friends.isEmpty {
 					HStack {
 						ProgressView()

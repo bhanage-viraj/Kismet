@@ -103,6 +103,27 @@ final class FriendsStore {
 		}
 	}
 
+	/// Pairs you with a backend-seeded "Alex (Test)" user for single-device demos.
+	@discardableResult
+	func seedTestFriend() async -> Bool {
+		isMutating = true
+		lastErrorMessage = nil
+		lastSuccessMessage = nil
+		defer { isMutating = false }
+
+		do {
+			let friend: FriendSummaryDTO = try await client.post("/dev/seed-test-friend")
+			await refresh()
+			graphRevision += 1
+			lastSuccessMessage = "Seeded \(friend.displayName ?? "Alex (Test)"). Open Map, then ask Siri how your friends are doing."
+			return true
+		} catch {
+			let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+			lastErrorMessage = "Couldn't seed test friend: \(message). Is DEV_SEED_ENABLED set on the API?"
+			return false
+		}
+	}
+
 	func clearMessages() {
 		lastErrorMessage = nil
 		lastSuccessMessage = nil

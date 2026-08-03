@@ -79,13 +79,18 @@ final class MapFriendsStore {
 
 			let originLocation = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
 			let mapped: [MapPerson] = mapFriends.compactMap { friend in
-				guard let location = locationsBySender[friend.userId] else { return nil }
-				return Self.makePerson(
-					from: friend,
-					payload: location.payload,
-					blobUpdatedAt: friend.blobUpdatedAt ?? location.updatedAt,
-					origin: originLocation
-				)
+				if let location = locationsBySender[friend.userId] {
+					return Self.makePerson(
+						from: friend,
+						payload: location.payload,
+						blobUpdatedAt: friend.blobUpdatedAt ?? location.updatedAt,
+						origin: originLocation
+					)
+				}
+				// Seeded demo friends have no E2EE location — place a nearby pin so
+				// Siri / map / Intelligence still have someone to talk about.
+				guard friend.isDemoFriend else { return nil }
+				return Self.makeTestPerson(from: friend, near: originLocation)
 			}
 			.sorted { $0.distanceMeters < $1.distanceMeters }
 
@@ -95,6 +100,7 @@ final class MapFriendsStore {
 			if let selectedFriendID, !mapped.contains(where: { $0.id == selectedFriendID }) {
 				self.selectedFriendID = nil
 			}
+			await FriendSpotlightIndexer.reindex()
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
@@ -114,9 +120,44 @@ final class MapFriendsStore {
 		lastErrorMessage = nil
 		lastRefreshedAt = nil
 		isLoading = false
+		Task { await FriendSpotlightIndexer.reindex() }
 	}
 
 	// MARK: - Mapping
+
+	/// Places a seeded demo friend ~350m NE of the viewer using server availability.
+	private static func makeTestPerson(from friend: MapFriendDTO, near origin: CLLocation) -> MapPerson {
+		let metersNorth = 250.0
+		let metersEast = 250.0
+		let lat = origin.coordinate.latitude + (metersNorth / 111_320.0)
+		let lon = origin.coordinate.longitude
+			+ (metersEast / (111_320.0 * max(0.2, cos(origin.coordinate.latitude * .pi / 180.0))))
+		let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+		let distance = origin.distance(from: CLLocation(latitude: lat, longitude: lon))
+		let availability = friend.availability.status.mapAvailability
+		let presence = PresenceState.from(availabilityStatus: friend.availability.status)
+		let walking = formattedWalkingMinutes(distanceMeters: distance)
+		let interestsList = Array(friend.sharedInterests.prefix(4))
+		let interests = interestsList.prefix(2).joined(separator: ", ")
+		let displayName = friend.displayName?.isEmpty == false ? (friend.displayName ?? "Friend") : "Friend"
+
+		return MapPerson(
+			id: friend.userId,
+			displayName: displayName,
+			coordinate: coordinate,
+			availability: availability,
+			presenceState: presence,
+			distanceMeters: distance,
+			sharedInterests: interestsList,
+			insightSummary: "\(displayName) is free nearby (demo friend).\n\(walking).",
+			intentLabel: intentLabel(availability: availability, interests: interests),
+			neighborhoodLabel: "Demo pin",
+			mutualFriendCount: 0,
+			accentSystemImage: "person.crop.circle.badge.checkmark",
+			ctaTitle: ctaTitle(for: availability),
+			ctaSystemImage: ctaSystemImage(for: availability)
+		)
+	}
 
 	private static func makePerson(
 		from friend: MapFriendDTO,
