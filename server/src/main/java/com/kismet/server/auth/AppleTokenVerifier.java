@@ -5,10 +5,14 @@ import java.security.KeyFactory;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.RSAPublicKeySpec;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Base64;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -27,7 +31,8 @@ public class AppleTokenVerifier {
 	private static final String APPLE_ISS = "https://appleid.apple.com";
 	private static final String APPLE_JWKS_URL = "https://appleid.apple.com/auth/keys";
 
-	private final String clientId;
+	/** Allowed Apple JWT `aud` values (bundle IDs). Comma-separated in config. */
+	private final Set<String> clientIds;
 	private final boolean verifyToken;
 	private final RestClient restClient;
 	private final Map<String, RSAPublicKey> keyCache = new ConcurrentHashMap<>();
@@ -35,9 +40,22 @@ public class AppleTokenVerifier {
 	public AppleTokenVerifier(
 			@Value("${kismet.apple.client-id}") String clientId,
 			@Value("${kismet.apple.verify-token}") boolean verifyToken) {
-		this.clientId = clientId;
+		this.clientIds = parseClientIds(clientId);
+		if (this.clientIds.isEmpty()) {
+			throw new IllegalStateException("APPLE_CLIENT_ID must list at least one bundle ID");
+		}
 		this.verifyToken = verifyToken;
 		this.restClient = RestClient.create();
+	}
+
+	static Set<String> parseClientIds(String raw) {
+		if (raw == null || raw.isBlank()) {
+			return Set.of();
+		}
+		return Arrays.stream(raw.split(","))
+				.map(String::trim)
+				.filter(s -> !s.isEmpty())
+				.collect(Collectors.toCollection(LinkedHashSet::new));
 	}
 
 	public AppleIdentity verify(String identityToken) {
@@ -61,14 +79,16 @@ public class AppleTokenVerifier {
 		String kid = readHeaderKid(identityToken);
 		RSAPublicKey publicKey = resolveKey(kid);
 
+		// Don't pin a single audience — teammate builds use a different bundle ID.
+		// Signature + issuer are verified; aud is checked against the allowlist.
 		Claims claims = Jwts.parser()
 				.verifyWith(publicKey)
 				.requireIssuer(APPLE_ISS)
-				.requireAudience(clientId)
 				.build()
 				.parseSignedClaims(identityToken)
 				.getPayload();
 
+		requireAllowedAudience(claims.getAudience());
 		return fromClaims(claims);
 	}
 
@@ -81,13 +101,7 @@ public class AppleTokenVerifier {
 			throw new ApiException(HttpStatus.UNAUTHORIZED, "Apple token missing sub");
 		}
 
-		Object aud = payload.get("aud");
-		if (aud instanceof String audStr && !clientId.equals(audStr)) {
-			throw new ApiException(HttpStatus.UNAUTHORIZED, "Apple token audience mismatch");
-		}
-		if (aud instanceof List<?> audList && audList.stream().noneMatch(clientId::equals)) {
-			throw new ApiException(HttpStatus.UNAUTHORIZED, "Apple token audience mismatch");
-		}
+		requireAllowedAudience(payload.get("aud"));
 
 		Object expObj = payload.get("exp");
 		if (expObj instanceof Number exp && Instant.ofEpochSecond(exp.longValue()).isBefore(Instant.now())) {
@@ -96,6 +110,20 @@ public class AppleTokenVerifier {
 
 		String email = payload.get("email") instanceof String e ? e : null;
 		return new AppleIdentity(sub, email);
+	}
+
+	private void requireAllowedAudience(Object aud) {
+		boolean ok = false;
+		if (aud instanceof String audStr) {
+			ok = clientIds.contains(audStr);
+		} else if (aud instanceof Set<?> audSet) {
+			ok = audSet.stream().anyMatch(v -> v instanceof String s && clientIds.contains(s));
+		} else if (aud instanceof List<?> audList) {
+			ok = audList.stream().anyMatch(v -> v instanceof String s && clientIds.contains(s));
+		}
+		if (!ok) {
+			throw new ApiException(HttpStatus.UNAUTHORIZED, "Apple token audience mismatch");
+		}
 	}
 
 	private AppleIdentity fromClaims(Claims claims) {

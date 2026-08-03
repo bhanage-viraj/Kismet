@@ -1,16 +1,16 @@
-# Kismet
+# indeKismet
 
-Monorepo folder scaffold (no feature code yet).
+iOS app + Spring backend monorepo (product name: **indeKismet**).
 
 ```text
-Kismet/                 # iOS app (Hello World + empty feature folders)
+Kismet/                 # iOS app sources (target/folder names kept for now)
 Kismet.xcodeproj/
-KismetWidgets/          # P1 stub (empty)
+KismetWidgets/
 KismetTests/
 KismetUITests/
-server/                 # Spring Boot package folders (empty)
+server/
 docs/
 scripts/
 ```
 
-Open `Kismet.xcodeproj` for the iOS Hello World. Fill folders as you build features.
+Bundle ID: `bhanageviraj.indeKismet`. Open `Kismet.xcodeproj` in Xcode.
