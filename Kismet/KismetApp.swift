@@ -7,6 +7,7 @@
 
 import SwiftData
 import SwiftUI
+import WidgetKit
 
 @main
 struct KismetApp: App {
@@ -41,6 +42,14 @@ struct KismetApp: App {
 				.modelContainer(meetupContainer)
 				.task {
 					await authSession.restore()
+					// Drop leftover preview/demo widget seeds, then warm the map cache from real data only.
+					if let snapshot = AppGroup.loadSnapshot() {
+						WidgetMapSnapshotRenderer.refresh(from: snapshot)
+					} else {
+						WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.mapWidgetKind)
+						WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.widgetKind)
+						WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.meetupWidgetKind)
+					}
 				}
 		}
 	}

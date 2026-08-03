@@ -127,6 +127,7 @@ extension VisitLocationManager: CLLocationManagerDelegate {
 			userCoordinate = location.coordinate
 			lastErrorMessage = nil
 			scheduleReverseGeocode(for: location)
+			MeetupLiveActivityTracker.handleLocationUpdate(location)
 		}
 	}
 
