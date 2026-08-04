@@ -22,6 +22,7 @@ struct KismetApp: App {
 	@State private var realtimeClient = AppEnvironment.shared.realtimeClient
 	@State private var suggestionEngine = AppEnvironment.shared.suggestionEngine
 	@State private var pulsePublisher = AppEnvironment.shared.pulsePublisher
+	@State private var pulseInbox = AppEnvironment.shared.pulseInbox
 	@State private var mapWeather = AppEnvironment.shared.mapWeather
 	@State private var weatherObstacles = AppEnvironment.shared.weatherObstacles
 	@State private var meetupMemoryStore = AppEnvironment.shared.meetupMemoryStore
@@ -42,6 +43,7 @@ struct KismetApp: App {
 				.environment(realtimeClient)
 				.environment(suggestionEngine)
 				.environment(pulsePublisher)
+				.environment(pulseInbox)
 				.environment(mapWeather)
 				.environment(weatherObstacles)
 				.environment(meetupMemoryStore)
