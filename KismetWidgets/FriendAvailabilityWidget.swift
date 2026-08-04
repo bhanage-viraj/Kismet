@@ -57,22 +57,18 @@ struct NearbyMapProvider: TimelineProvider {
 		completion: @escaping (FriendAvailabilityEntry) -> Void
 	) {
 		let snapshot = WidgetAppGroup.loadSnapshot()
-		let cards = snapshot?.cards ?? []
-
-		// Never reuse a pin-filled map cache when there are no real friends.
-		guard !cards.isEmpty else {
-			WidgetAppGroup.clearCachedMapImage()
-			completion(FriendAvailabilityEntry(date: .now, snapshot: snapshot, mapImage: nil))
-			return
-		}
 
 		if let cached = WidgetAppGroup.loadCachedMapImage(for: family) {
 			completion(FriendAvailabilityEntry(date: .now, snapshot: snapshot, mapImage: cached))
 			return
 		}
 
+		// Widget extensions often can't fetch MapKit tiles — still try, then fall back to any cache.
 		renderMap(snapshot: snapshot, family: family, displaySize: displaySize) { image in
-			completion(FriendAvailabilityEntry(date: .now, snapshot: snapshot, mapImage: image))
+			let resolved = image
+				?? WidgetAppGroup.loadCachedMapImage(for: family)
+				?? WidgetAppGroup.loadCachedMapImage()
+			completion(FriendAvailabilityEntry(date: .now, snapshot: snapshot, mapImage: resolved))
 		}
 	}
 

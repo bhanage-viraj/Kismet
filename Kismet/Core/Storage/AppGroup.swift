@@ -134,6 +134,11 @@ enum AppGroup {
 		return UIImage(contentsOfFile: url.path)
 	}
 
+	/// Loads a cached avatar written for a friend / user id (same naming as snapshot writer).
+	static func loadAvatarImage(friendID: String) -> UIImage? {
+		loadAvatarImage(fileName: sanitizedAvatarFileName(for: friendID))
+	}
+
 	static func clearAvatars() {
 		guard let directory = avatarsDirectoryURL else { return }
 		try? FileManager.default.removeItem(at: directory)

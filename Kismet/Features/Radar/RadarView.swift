@@ -6,26 +6,22 @@ struct RadarView: View {
 	var body: some View {
 		Group {
 			if embedded {
-				content
+				BumpFlowView()
 			} else {
 				NavigationStack {
-					content
+					BumpFlowView()
 						.navigationTitle("Radar")
+						.navigationBarTitleDisplayMode(.inline)
 				}
 			}
 		}
 	}
-
-	private var content: some View {
-		ContentUnavailableView {
-			Label("Radar", systemImage: "scope")
-		} description: {
-			Text("Proximity pulses and who’s free nearby will land here once live friend location is wired up.")
-		}
-		.frame(maxWidth: .infinity, maxHeight: .infinity)
-	}
 }
 
+#if DEBUG
 #Preview {
 	RadarView()
+		.environment(AuthSession.previewSignedIn(displayName: "Ada"))
+		.environment(FriendsStore.preview())
 }
+#endif

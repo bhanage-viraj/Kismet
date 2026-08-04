@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		6C82C30B3019898900EAD129 /* KismetWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6C82C3013019898900EAD129 /* KismetWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6C82C3A03019898900EAD130 /* MultipeerConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C82C3A13019898900EAD130 /* MultipeerConnectivity.framework */; };
+		6C82C3A23019898900EAD130 /* NearbyInteraction.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6C82C3A33019898900EAD130 /* NearbyInteraction.framework */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -52,6 +54,8 @@
 		6C82C2443019898800EAD129 /* Kismet.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Kismet.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C82C2513019898900EAD129 /* KismetTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KismetTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C82C3013019898900EAD129 /* KismetWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = KismetWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C82C3A13019898900EAD130 /* MultipeerConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MultipeerConnectivity.framework; path = System/Library/Frameworks/MultipeerConnectivity.framework; sourceTree = SDKROOT; };
+		6C82C3A33019898900EAD130 /* NearbyInteraction.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = NearbyInteraction.framework; path = System/Library/Frameworks/NearbyInteraction.framework; sourceTree = SDKROOT; };
 		787319FD3020821400D57F14 /* KismetUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = KismetUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -106,6 +110,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6C82C3A03019898900EAD130 /* MultipeerConnectivity.framework in Frameworks */,
+				6C82C3A23019898900EAD130 /* NearbyInteraction.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -139,6 +145,7 @@
 				6C82C2463019898800EAD129 /* Kismet */,
 				6C82C3023019898900EAD129 /* KismetWidgets */,
 				6C82C2453019898800EAD129 /* Products */,
+				6C82C3A43019898900EAD130 /* Frameworks */,
 				787319FC3020821400D57F14 /* Recovered References */,
 			);
 			sourceTree = "<group>";
@@ -152,6 +159,15 @@
 				787319FD3020821400D57F14 /* KismetUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6C82C3A43019898900EAD130 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				6C82C3A13019898900EAD130 /* MultipeerConnectivity.framework */,
+				6C82C3A33019898900EAD130 /* NearbyInteraction.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 		787319FC3020821400D57F14 /* Recovered References */ = {
@@ -520,9 +536,14 @@
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = indeKismet;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "indeKismet uses Bluetooth so Bump can find phones nearby and connect when you both consent.";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "indeKismet uses your calendar to find free windows for spontaneous meetups.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "indeKismet uses the local network so Bump can discover friends nearby and exchange a secure handshake.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "indeKismet needs Always location so it can notice when you and a friend get nearby — even if the app is not open — and refresh your encrypted presence for friends.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "indeKismet needs Always location so it can notice when you and a friend get nearby — even if the app is not open — and refresh your encrypted presence for friends.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "indeKismet uses your location to show you on the map and surface friends who are nearby right now.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "indeKismet uses motion to avoid suggesting meetups while you're driving.";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "indeKismet uses Ultra Wideband so Radar can show how far away a nearby friend is and which direction they're in.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -534,7 +555,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismet;
+				PRODUCT_BUNDLE_IDENTIFIER = sanjivanand.IndeKismet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
@@ -562,9 +583,14 @@
 				INFOPLIST_FILE = Kismet/Resources/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = indeKismet;
 				INFOPLIST_KEY_CFBundleIconName = AppIcon;
+				INFOPLIST_KEY_NSBluetoothAlwaysUsageDescription = "indeKismet uses Bluetooth so Bump can find phones nearby and connect when you both consent.";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "indeKismet uses your calendar to find free windows for spontaneous meetups.";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "indeKismet uses the local network so Bump can discover friends nearby and exchange a secure handshake.";
+				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "indeKismet needs Always location so it can notice when you and a friend get nearby — even if the app is not open — and refresh your encrypted presence for friends.";
+				INFOPLIST_KEY_NSLocationAlwaysUsageDescription = "indeKismet needs Always location so it can notice when you and a friend get nearby — even if the app is not open — and refresh your encrypted presence for friends.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "indeKismet uses your location to show you on the map and surface friends who are nearby right now.";
 				INFOPLIST_KEY_NSMotionUsageDescription = "indeKismet uses motion to avoid suggesting meetups while you're driving.";
+				INFOPLIST_KEY_NSNearbyInteractionUsageDescription = "indeKismet uses Ultra Wideband so Radar can show how far away a nearby friend is and which direction they're in.";
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -576,7 +602,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = bhanageviraj.indeKismet;
+				PRODUCT_BUNDLE_IDENTIFIER = sanjivanand.IndeKismet;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;

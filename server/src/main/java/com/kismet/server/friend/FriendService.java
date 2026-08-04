@@ -117,36 +117,7 @@ public class FriendService {
 		assertUnderFriendLimit(userId);
 		assertUnderFriendLimit(ownerUserId);
 
-		Instant now = Instant.now();
-		String userAId = FriendPairDocument.canonicalA(userId, ownerUserId);
-		String userBId = FriendPairDocument.canonicalB(userId, ownerUserId);
-
-		FriendPairDocument pair = friendPairRepository.findByUserAIdAndUserBId(userAId, userBId)
-				.orElse(null);
-		if (pair == null) {
-			pair = FriendPairDocument.create(
-					userId, ownerUserId, ConnectedVia.INVITE_CODE, PairStatus.ACTIVE, now);
-		}
-		else if (pair.getStatus() == PairStatus.ACTIVE) {
-			throw new ApiException(HttpStatus.CONFLICT, "You are already connected");
-		}
-		else {
-			// Re-friending after a revoke reuses the row; the unique index would reject a
-			// second one.
-			pair.setStatus(PairStatus.ACTIVE);
-			pair.setConnectedVia(ConnectedVia.INVITE_CODE);
-			pair.setRequestedByUserId(userId);
-			pair.setAcceptedAt(now);
-			pair.setUpdatedAt(now);
-		}
-
-		FriendPairDocument saved;
-		try {
-			saved = friendPairRepository.save(pair);
-		}
-		catch (DuplicateKeyException ex) {
-			throw new ApiException(HttpStatus.CONFLICT, "You are already connected");
-		}
+		FriendPairDocument saved = activateOrCreatePair(userId, ownerUserId, ConnectedVia.INVITE_CODE);
 
 		invite.setUsesRemaining(invite.getUsesRemaining() - 1);
 		if (invite.getUsesRemaining() <= 0) {
@@ -158,6 +129,30 @@ public class FriendService {
 
 		eventPublisher.publishEvent(new FriendPairedEvent(userId, ownerUserId));
 		return toSummary(saved, owner, userId);
+	}
+
+	/**
+	 * Persists a friendship after local Bump consent + key exchange. Mutual tap already
+	 * happened on-device — there is no pending/accept step on the server for this path.
+	 */
+	public FriendSummary pairViaBump(String userId, String rawPeerUserId, String peerPublicKey) {
+		String peerUserId = rawPeerUserId == null ? "" : rawPeerUserId.trim();
+		if (peerUserId.isEmpty()) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "Peer user id is required");
+		}
+		if (peerUserId.equals(userId)) {
+			throw new ApiException(HttpStatus.BAD_REQUEST, "You cannot pair with yourself");
+		}
+
+		UserDocument peer = userService.requireById(peerUserId);
+		userService.requireById(userId);
+		assertPeerPublicKeyMatches(peer, peerPublicKey);
+		assertUnderFriendLimit(userId);
+		assertUnderFriendLimit(peerUserId);
+
+		FriendPairDocument saved = activateOrCreatePair(userId, peerUserId, ConnectedVia.BUMP);
+		eventPublisher.publishEvent(new FriendPairedEvent(userId, peerUserId));
+		return toSummary(saved, peer, userId);
 	}
 
 	/**
@@ -227,6 +222,63 @@ public class FriendService {
 		pair.setUpdatedAt(Instant.now());
 		friendPairRepository.save(pair);
 		eventPublisher.publishEvent(new FriendRevokedEvent(userId, friendUserId));
+	}
+
+	/**
+	 * Creates an {@code ACTIVE} pair or reactivates a revoked one. Throws {@code 409} when
+	 * the pair is already active so both invite-redeem and Bump stay idempotent at the
+	 * client (treat conflict as already friends).
+	 */
+	private FriendPairDocument activateOrCreatePair(
+			String requesterUserId,
+			String targetUserId,
+			ConnectedVia connectedVia) {
+		Instant now = Instant.now();
+		String userAId = FriendPairDocument.canonicalA(requesterUserId, targetUserId);
+		String userBId = FriendPairDocument.canonicalB(requesterUserId, targetUserId);
+
+		FriendPairDocument pair = friendPairRepository.findByUserAIdAndUserBId(userAId, userBId)
+				.orElse(null);
+		if (pair == null) {
+			pair = FriendPairDocument.create(
+					requesterUserId, targetUserId, connectedVia, PairStatus.ACTIVE, now);
+		}
+		else if (pair.getStatus() == PairStatus.ACTIVE) {
+			throw new ApiException(HttpStatus.CONFLICT, "You are already connected");
+		}
+		else {
+			// Re-friending after a revoke reuses the row; the unique index would reject a
+			// second one.
+			pair.setStatus(PairStatus.ACTIVE);
+			pair.setConnectedVia(connectedVia);
+			pair.setRequestedByUserId(requesterUserId);
+			pair.setAcceptedAt(now);
+			pair.setUpdatedAt(now);
+		}
+
+		try {
+			return friendPairRepository.save(pair);
+		}
+		catch (DuplicateKeyException ex) {
+			throw new ApiException(HttpStatus.CONFLICT, "You are already connected");
+		}
+	}
+
+	/**
+	 * When Bump sends the peer's locally exchanged public key and that peer already
+	 * published one, they must match — otherwise someone is spoofing the peer id.
+	 */
+	private static void assertPeerPublicKeyMatches(UserDocument peer, String peerPublicKey) {
+		if (peerPublicKey == null || peerPublicKey.isBlank()) {
+			return;
+		}
+		String published = peer.getPublicKey();
+		if (published == null || published.isBlank()) {
+			return;
+		}
+		if (!published.equals(peerPublicKey.trim())) {
+			throw new ApiException(HttpStatus.CONFLICT, "Peer public key does not match");
+		}
 	}
 
 	private void assertUnderFriendLimit(String userId) {

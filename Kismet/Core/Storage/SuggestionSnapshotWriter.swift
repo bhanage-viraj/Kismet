@@ -3,20 +3,24 @@ import Foundation
 import WidgetKit
 
 enum SuggestionSnapshotWriter {
-	static func persist(cards: [SuggestionCard], updatedAt: Date = Date()) {
+	static func persist(
+		cards: [SuggestionCard],
+		updatedAt: Date = Date(),
+		userCoordinate: CLLocationCoordinate2D? = nil
+	) {
 		// Never write Xcode-preview / MockFriendsProvider seeds into the App Group.
 		let realCards = cards.filter {
 			!AppGroup.isMockFriendID($0.id) && !AppGroup.isMockFriendID($0.friendID)
 		}
-		guard !realCards.isEmpty else {
-			clear()
-			return
-		}
 
-		let snapshot = makeSnapshot(from: realCards, updatedAt: updatedAt)
+		let snapshot = makeSnapshot(
+			from: realCards,
+			updatedAt: updatedAt,
+			userCoordinate: userCoordinate
+		)
 		AppGroup.saveSnapshot(snapshot)
 		reloadWidgets()
-		// Generate a real MapKit image in the foreground app — widgets often can't fetch tiles.
+		// Always refresh the map image (empty = map with only “you”, no friend pins).
 		WidgetMapSnapshotRenderer.refresh(from: snapshot)
 	}
 
@@ -26,7 +30,16 @@ enum SuggestionSnapshotWriter {
 		reloadWidgets()
 	}
 
-	static func makeSnapshot(from cards: [SuggestionCard], updatedAt: Date = Date()) -> AppGroup.SuggestionSnapshot {
+	/// Warm an empty / location-only map for the Friends Map widget.
+	static func persistEmptyMap(userCoordinate: CLLocationCoordinate2D?) {
+		persist(cards: [], userCoordinate: userCoordinate)
+	}
+
+	static func makeSnapshot(
+		from cards: [SuggestionCard],
+		updatedAt: Date = Date(),
+		userCoordinate: CLLocationCoordinate2D? = nil
+	) -> AppGroup.SuggestionSnapshot {
 		let widgetCards = cards.map(mapCard)
 		let keptAvatars = Set(widgetCards.compactMap(\.avatarFileName))
 		AppGroup.pruneAvatars(keeping: keptAvatars)
@@ -42,6 +55,8 @@ enum SuggestionSnapshotWriter {
 				: "\(widgetCards.count) friends nearby"
 		}()
 
+		let origin = resolvedUserCoordinate(from: cards, override: userCoordinate)
+
 		return AppGroup.SuggestionSnapshot(
 			schemaVersion: AppGroup.schemaVersion,
 			updatedAt: updatedAt,
@@ -49,8 +64,8 @@ enum SuggestionSnapshotWriter {
 			friendCountNearby: widgetCards.count,
 			cards: widgetCards,
 			featuredMeetup: featuredMeetup(from: cards.first),
-			userLatitude: userCoordinate(from: cards)?.latitude,
-			userLongitude: userCoordinate(from: cards)?.longitude
+			userLatitude: origin?.latitude,
+			userLongitude: origin?.longitude
 		)
 	}
 
@@ -81,11 +96,13 @@ enum SuggestionSnapshotWriter {
 		)
 	}
 
-	/// Prefer a centroid of friend pins so the map frames the group; falls back to Bangalore demo center.
-	private static func userCoordinate(from cards: [SuggestionCard]) -> CLLocationCoordinate2D? {
-		guard !cards.isEmpty else {
-			return CLLocationCoordinate2D(latitude: 12.9352, longitude: 77.6245)
-		}
+	/// Prefer an explicit user fix; else friend centroid; else nil (renderer uses its own fallback).
+	private static func resolvedUserCoordinate(
+		from cards: [SuggestionCard],
+		override: CLLocationCoordinate2D?
+	) -> CLLocationCoordinate2D? {
+		if let override { return override }
+		guard !cards.isEmpty else { return nil }
 		let lat = cards.map(\.coordinate.latitude).reduce(0, +) / Double(cards.count)
 		let lon = cards.map(\.coordinate.longitude).reduce(0, +) / Double(cards.count)
 		return CLLocationCoordinate2D(latitude: lat, longitude: lon)

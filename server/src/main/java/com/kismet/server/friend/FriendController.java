@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.kismet.server.config.AuthUser;
+import com.kismet.server.friend.dto.BumpPairRequest;
 import com.kismet.server.friend.dto.FriendListResponse;
 import com.kismet.server.friend.dto.FriendSummary;
 import com.kismet.server.friend.dto.InviteCodeResponse;
@@ -38,6 +39,18 @@ public class FriendController {
 			@AuthenticationPrincipal AuthUser authUser,
 			@Valid @RequestBody PairRequest request) {
 		return friendService.redeemInvite(authUser.userId(), request.inviteCode());
+	}
+
+	/**
+	 * Persists a friendship after an in-person Bump ceremony. Mutual consent already
+	 * happened on-device; this endpoint only writes the {@code ACTIVE} pair.
+	 */
+	@PostMapping("/pair")
+	public FriendSummary pairViaBump(
+			@AuthenticationPrincipal AuthUser authUser,
+			@Valid @RequestBody BumpPairRequest request) {
+		return friendService.pairViaBump(
+				authUser.userId(), request.peerUserId(), request.peerPublicKey());
 	}
 
 	@GetMapping
