@@ -39,10 +39,18 @@ enum APIClientError: LocalizedError {
 actor APIClient {
 	static let shared = APIClient()
 
+	/// Default session for normal API calls.
 	private let session: URLSession
+	/// Longer timeouts so a Render free-tier cold start (~2 min) can finish.
+	private let coldStartSession: URLSession
 
 	init(session: URLSession = .shared) {
 		self.session = session
+		let config = URLSessionConfiguration.ephemeral
+		config.timeoutIntervalForRequest = 120
+		config.timeoutIntervalForResource = 180
+		config.waitsForConnectivity = true
+		self.coldStartSession = URLSession(configuration: config)
 	}
 
 	func request<T: Decodable>(
@@ -50,7 +58,8 @@ actor APIClient {
 		path: String,
 		body: (any Encodable)? = nil,
 		authorized: Bool = true,
-		retryOnUnauthorized: Bool = true
+		retryOnUnauthorized: Bool = true,
+		allowColdStart: Bool = false
 	) async throws -> T {
 		let url = APIConfig.baseURL.appendingPathComponent(path.trimmingCharacters(in: CharacterSet(charactersIn: "/")))
 		var request = URLRequest(url: url)
@@ -66,7 +75,8 @@ actor APIClient {
 			request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
 		}
 
-		let (data, response) = try await session.data(for: request)
+		let activeSession = allowColdStart ? coldStartSession : session
+		let (data, response) = try await activeSession.data(for: request)
 		guard let http = response as? HTTPURLResponse else {
 			throw APIClientError.invalidResponse
 		}
@@ -79,7 +89,8 @@ actor APIClient {
 					path: path,
 					body: body,
 					authorized: true,
-					retryOnUnauthorized: false
+					retryOnUnauthorized: false,
+					allowColdStart: allowColdStart
 				)
 			}
 			throw APIClientError.unauthorized
@@ -102,6 +113,75 @@ actor APIClient {
 			return try APIConfig.jsonDecoder.decode(T.self, from: data)
 		} catch {
 			throw APIClientError.decoding(error)
+		}
+	}
+
+	/// Ping health so a sleeping Render free instance starts waking before sign-in.
+	func wakeServer() async {
+		do {
+			let _: EmptyResponse = try await request(
+				method: "GET",
+				path: "/actuator/health",
+				body: nil as String?,
+				authorized: false,
+				retryOnUnauthorized: false,
+				allowColdStart: true
+			)
+		} catch {
+			// Wake is best-effort; the real call retries below.
+		}
+	}
+
+	/// Retries transient failures (timeouts / 502–504) that happen while Render is cold-starting.
+	func requestWithTransientRetry<T: Decodable>(
+		method: String,
+		path: String,
+		body: (any Encodable)? = nil,
+		authorized: Bool = true,
+		attempts: Int = 3
+	) async throws -> T {
+		var lastError: Error?
+		for attempt in 1...max(attempts, 1) {
+			do {
+				return try await request(
+					method: method,
+					path: path,
+					body: body,
+					authorized: authorized,
+					allowColdStart: true
+				)
+			} catch {
+				lastError = error
+				guard attempt < attempts, Self.isTransientFailure(error) else { throw error }
+				try await Task.sleep(for: .seconds(Double(attempt) * 1.5))
+			}
+		}
+		throw lastError ?? APIClientError.invalidResponse
+	}
+
+	private static func isTransientFailure(_ error: Error) -> Bool {
+		if let api = error as? APIClientError {
+			switch api {
+			case .httpStatus(let code, _):
+				return [408, 425, 429, 502, 503, 504].contains(code)
+			case .invalidResponse:
+				return true
+			case .unauthorized, .invalidURL, .decoding:
+				return false
+			}
+		}
+		let ns = error as NSError
+		guard ns.domain == NSURLErrorDomain else { return false }
+		switch ns.code {
+		case NSURLErrorTimedOut,
+			NSURLErrorCannotConnectToHost,
+			NSURLErrorNetworkConnectionLost,
+			NSURLErrorDNSLookupFailed,
+			NSURLErrorNotConnectedToInternet,
+			NSURLErrorCannotFindHost:
+			return true
+		default:
+			return false
 		}
 	}
 

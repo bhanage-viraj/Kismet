@@ -32,6 +32,11 @@ struct OnboardingFlowView: View {
 						await authSession.handleSignInCompletion(result)
 					}
 				}
+				.task {
+					// Start waking a sleeping free-tier Render instance while the
+					// user reads the sign-in screen / taps Apple.
+					await APIClient.shared.wakeServer()
+				}
 				.overlay {
 					if authSession.isSigningIn {
 						ZStack {
