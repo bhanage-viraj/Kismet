@@ -70,7 +70,20 @@ class BlobServiceTest {
 		verify(bulkOperations, org.mockito.Mockito.times(2)).upsert(any(), any());
 		verify(bulkOperations).execute();
 		verify(realtimeEventPublisher).blobsAvailable(List.of("friend-a", "friend-b"), "user-1");
-		verify(pushWakeService).wakeRecipientsForLocationBlob(List.of("friend-a", "friend-b"), "user-1");
+		verify(pushWakeService).wakeRecipients(List.of("friend-a", "friend-b"), "user-1", "LOCATION");
+	}
+
+	@Test
+	void uploadWakesRecipientsForPulseBlobs() {
+		givenFriends("user-1", "friend-a");
+		givenBulkOps();
+
+		BlobUploadResponse response = blobService.upload("user-1", List.of(
+				new CreateBlobRequest("friend-a", "PULSE", "cipher-pulse", 1)));
+
+		assertEquals(1, response.accepted());
+		verify(pushWakeService).wakeRecipients(List.of("friend-a"), "user-1", "PULSE");
+		verify(pushWakeService, never()).wakeRecipients(any(), any(), org.mockito.ArgumentMatchers.eq("LOCATION"));
 	}
 
 	@Test
