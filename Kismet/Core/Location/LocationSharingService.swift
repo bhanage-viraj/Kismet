@@ -45,11 +45,13 @@ final class LocationSharingService {
 	/// Encrypts the current fix for each friend with a public key and uploads a LOCATION batch.
 	/// Presence shapes precision (Approximate/Eclipse are quantized) and is sealed as `mode`.
 	/// Eclipse still publishes a blob so friends can hide the pin immediately.
+	/// Friends Only: precise for the allowlist; Eclipse-style hide overwrite for everyone else.
 	func shareIfNeeded(
 		location: CLLocation?,
 		senderUserId: String?,
 		friends: [FriendSummaryDTO],
 		presence: PresenceState,
+		friendsOnlyVisibleIds: Set<String>? = nil,
 		force: Bool = false
 	) {
 		guard isSharingActive || force else { return }
@@ -62,6 +64,7 @@ final class LocationSharingService {
 				senderUserId: senderUserId,
 				friends: friends,
 				presence: presence,
+				friendsOnlyVisibleIds: friendsOnlyVisibleIds,
 				force: force
 			)
 		}
@@ -72,6 +75,7 @@ final class LocationSharingService {
 		senderUserId: String,
 		friends: [FriendSummaryDTO],
 		presence: PresenceState,
+		friendsOnlyVisibleIds: Set<String>?,
 		force: Bool
 	) async {
 		guard !Task.isCancelled else { return }
@@ -95,13 +99,21 @@ final class LocationSharingService {
 		lastErrorMessage = nil
 		defer { isUploading = false }
 
-		let payload = PresenceLocationPolicy.payload(from: location, presence: presence)
+		let precisePayload = PresenceLocationPolicy.payload(from: location, presence: presence)
+		let hidePayload = PresenceLocationPolicy.payload(from: location, presence: .eclipse)
 
 		var blobs: [CreateBlobRequestDTO] = []
 		blobs.reserveCapacity(recipients.count)
 
 		for friend in recipients {
 			guard let publicKey = friend.publicKey else { continue }
+			let payload: LocationPayloadDTO
+			if presence == .friendsOnly {
+				let allowed = friendsOnlyVisibleIds.map { $0.contains(friend.userId) } ?? true
+				payload = allowed ? precisePayload : hidePayload
+			} else {
+				payload = precisePayload
+			}
 			do {
 				let ciphertext = try await crypto.sealLocation(
 					payload,

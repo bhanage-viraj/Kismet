@@ -1,6 +1,6 @@
 import Foundation
 
-struct PulsePayloadDTO: Codable, Sendable {
+struct PulsePayloadDTO: Codable, Sendable, Equatable {
 	var pulseId: String
 	var emoji: String
 	var label: String

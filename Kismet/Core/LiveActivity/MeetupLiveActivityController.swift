@@ -5,6 +5,7 @@ import Foundation
 /// Starts / updates / ends a meetup Live Activity from the main app.
 /// Lock Screen always starts compact (`isExpanded: false`); the user taps to expand.
 /// ETA / distance refresh via `MeetupLiveActivityTracker` as location updates arrive.
+/// Uses ActivityKit push tokens so the peer's device can receive ContentState updates.
 @MainActor
 enum MeetupLiveActivityController {
 	@discardableResult
@@ -25,11 +26,15 @@ enum MeetupLiveActivityController {
 		initial.isEnded = false
 
 		let content = ActivityContent(state: initial, staleDate: Date().addingTimeInterval(15 * 60))
-		return try Activity.request(
+		let activity = try Activity.request(
 			attributes: attributes,
 			content: content,
-			pushType: nil
+			pushType: .token
 		)
+		Task {
+			await observePushToken(for: activity)
+		}
+		return activity
 	}
 
 	/// Starts a meetup Live Activity and seeds ETA from the current location + meet time.
@@ -109,6 +114,15 @@ enum MeetupLiveActivityController {
 			state.isEnded = false
 			let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(15 * 60))
 			await activity.update(content)
+			await LiveActivityPushRegistrar.pushContentState(
+				meetupId: activity.attributes.meetupID,
+				etaText: etaText,
+				distanceText: distanceText,
+				progress: progress,
+				isEnded: false,
+				isExpanded: state.isExpanded,
+				event: "update"
+			)
 		}
 	}
 
@@ -131,7 +145,23 @@ enum MeetupLiveActivityController {
 			staleDate: nil
 		)
 		for activity in Activity<MeetupActivityAttributes>.activities {
+			await LiveActivityPushRegistrar.pushContentState(
+				meetupId: activity.attributes.meetupID,
+				etaText: "—",
+				distanceText: "—",
+				progress: 1,
+				isEnded: true,
+				isExpanded: false,
+				event: "end"
+			)
 			await activity.end(final, dismissalPolicy: dismissalPolicy)
+		}
+	}
+
+	private static func observePushToken(for activity: Activity<MeetupActivityAttributes>) async {
+		let meetupId = activity.attributes.meetupID
+		for await tokenData in activity.pushTokenUpdates {
+			await LiveActivityPushRegistrar.uploadToken(meetupId: meetupId, pushToken: tokenData)
 		}
 	}
 
