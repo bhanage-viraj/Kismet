@@ -112,6 +112,57 @@ class ApiFlowIntegrationTest extends AbstractIntegrationTest {
 	}
 
 	@Test
+	void twoUsersPairThroughBumpAndSeeEachOther() throws Exception {
+		User alice = signUp("alice");
+		User bob = signUp("bob");
+
+		mockMvc.perform(put("/me/public-key")
+				.header("Authorization", bob.bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"publicKey\":\"bobs-bump-key\",\"keyVersion\":1}"))
+				.andExpect(status().isOk());
+
+		mockMvc.perform(post("/friends/pair")
+				.header("Authorization", alice.bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"peerUserId\":\"" + bob.id + "\",\"peerPublicKey\":\"bobs-bump-key\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.userId").value(bob.id))
+				.andExpect(jsonPath("$.connectedVia").value("BUMP"))
+				.andExpect(jsonPath("$.status").value("ACTIVE"))
+				.andExpect(jsonPath("$.publicKey").value("bobs-bump-key"));
+
+		mockMvc.perform(get("/friends").header("Authorization", alice.bearer()))
+				.andExpect(jsonPath("$.friends[0].userId").value(bob.id))
+				.andExpect(jsonPath("$.friends[0].connectedVia").value("BUMP"));
+		mockMvc.perform(get("/friends").header("Authorization", bob.bearer()))
+				.andExpect(jsonPath("$.friends[0].userId").value(alice.id));
+
+		mockMvc.perform(post("/friends/pair")
+				.header("Authorization", alice.bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"peerUserId\":\"" + bob.id + "\"}"))
+				.andExpect(status().isConflict());
+	}
+
+	@Test
+	void bumpPairRejectsSelfAndUnknownPeer() throws Exception {
+		User alice = signUp("alice");
+
+		mockMvc.perform(post("/friends/pair")
+				.header("Authorization", alice.bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"peerUserId\":\"" + alice.id + "\"}"))
+				.andExpect(status().isBadRequest());
+
+		mockMvc.perform(post("/friends/pair")
+				.header("Authorization", alice.bearer())
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"peerUserId\":\"does-not-exist\"}"))
+				.andExpect(status().isNotFound());
+	}
+
+	@Test
 	void anInviteCodeCannotBeRedeemedTwice() throws Exception {
 		User alice = signUp("alice");
 		String code = createInvite(alice);
@@ -392,13 +443,15 @@ class ApiFlowIntegrationTest extends AbstractIntegrationTest {
 
 	/**
 	 * Apple signature verification is off outside production, so the server only decodes
-	 * the payload. This builds the smallest token that carries a subject.
+	 * the payload. This builds the smallest token that carries a subject and an allowed
+	 * audience (bundle ID).
 	 */
 	private static String fakeIdentityToken(String appleSub) {
 		Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
 		String header = encoder.encodeToString("{\"alg\":\"none\"}".getBytes(StandardCharsets.UTF_8));
 		String payload = encoder.encodeToString(
-				("{\"sub\":\"" + appleSub + "\"}").getBytes(StandardCharsets.UTF_8));
+				("{\"sub\":\"" + appleSub + "\",\"aud\":\"bhanageviraj.indeKismet\"}")
+						.getBytes(StandardCharsets.UTF_8));
 		return header + "." + payload + ".signature";
 	}
 }

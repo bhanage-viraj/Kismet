@@ -195,6 +195,48 @@ Requires Bearer access token. Body `{ "inviteCode": "K0SFW008" }`. Codes are mat
 
 Re-pairing after a revoke reuses the existing row rather than creating a second one.
 
+### `POST /friends/pair`
+
+Requires Bearer access token. Persists a friendship after an in-person **Bump** ceremony (Multipeer mutual consent + local key exchange). Consent already happened on-device — there is no separate accept step. Invite/redeem remains the remote/QR path.
+
+Body:
+
+```json
+{
+  "peerUserId": "<other account id>",
+  "peerPublicKey": "<base64 X25519, optional>"
+}
+```
+
+`peerPublicKey` is optional. When present and the peer has already published a key via `PUT /me/public-key`, the values must match (TOFU check against a spoofed peer id).
+
+Response is the same `FriendSummary` shape as redeem, with `connectedVia: "BUMP"`:
+
+```json
+{
+  "pairId": "...",
+  "userId": "...",
+  "displayName": "Grace Hopper",
+  "publicKey": "<base64 X25519>",
+  "keyVersion": 1,
+  "status": "ACTIVE",
+  "connectedVia": "BUMP",
+  "since": "2026-08-04T03:30:00Z",
+  "initiatedByMe": true
+}
+```
+
+| Case | Status |
+|------|--------|
+| Missing `peerUserId` | `400` |
+| Pairing with yourself | `400` |
+| Unknown peer | `404` |
+| Already connected | `409` |
+| Peer public key mismatch | `409` |
+| Either side at the friend limit | `409` |
+
+Re-pairing after a revoke reuses the existing row and sets `connectedVia` to `BUMP`. Clients should treat `409 already connected` as success for idempotent double-calls from both devices.
+
 ### `GET /friends`
 
 Requires Bearer access token. Active friendships only, each with the friend's public key so the client can encrypt for them. `publicKey` is `null` until that friend publishes one.
@@ -335,7 +377,25 @@ A `CONNECT` without a valid access token is rejected. Subscribe to `/user/queue/
 
 Event types are `blob.available`, `friend.pair.created` and `friend.pair.revoked`. Blob events are **notifications only** and never carry ciphertext — fetch it with `GET /blobs/pending`.
 
+When APNs is configured, `LOCATION` blob uploads also send a **silent** (`content-available`) push to the recipient's registered device tokens so a backgrounded phone can wake, decrypt, and evaluate proximity on-device. The push payload carries only `type`, `kind`, and `senderUserId` — never coordinates.
+
 The broker is in-memory, so this is single-instance only; scaling out means swapping in a Redis or RabbitMQ relay.
+
+## Push
+
+### `POST /push/token`
+
+Requires Bearer access token. Registers this device for silent wake.
+
+```json
+{ "deviceToken": "<apns hex token>", "platform": "ios" }
+```
+
+Returns `{ "ok": true }`. Re-registering the same token is idempotent; a token that moves to another account is removed from the previous owner.
+
+### `DELETE /push/token`
+
+Requires Bearer access token. Body same as register. Best-effort cleanup on sign-out.
 
 ## Errors
 
@@ -367,6 +427,11 @@ See `server/.env.example`:
 | `BLOB_TTL_HOURS` | How long relayed ciphertext survives, default `12` |
 | `BLOB_MAX_CIPHERTEXT_BYTES` | Per-blob size cap, default `4096` |
 | `BLOB_MAX_BATCH_SIZE` | Blobs per upload, default `500` |
+| `APNS_ENABLED` | `true` to send silent wakes on LOCATION blobs |
+| `APNS_KEY_ID` / `APNS_TEAM_ID` | From Apple Developer → Keys |
+| `APNS_KEY_PATH` or `APNS_KEY_P8` | Auth Key `.p8` on disk or inline PEM |
+| `APNS_BUNDLE_ID` | Must match iOS `PRODUCT_BUNDLE_IDENTIFIER` |
+| `APNS_PRODUCTION` | `false` = sandbox APNs, `true` = production |
 
 ## Tests
 

@@ -5,6 +5,7 @@ struct MoreView: View {
 	@Environment(FriendsStore.self) private var friendsStore
 	@Environment(MapFriendsStore.self) private var mapFriendsStore
 	@Environment(LocationSharingService.self) private var locationSharing
+	@Environment(BackgroundProximityController.self) private var backgroundProximity
 	@Environment(RealtimeClient.self) private var realtimeClient
 	var embedded: Bool = false
 
@@ -44,6 +45,8 @@ struct MoreView: View {
 				Button("Sign Out", role: .destructive) {
 					Task {
 						realtimeClient.disconnect()
+						await PushTokenRegistrar.unregisterCurrentToken()
+						backgroundProximity.stop()
 						locationSharing.stop()
 						friendsStore.reset()
 						mapFriendsStore.reset()
@@ -61,10 +64,22 @@ struct MoreView: View {
 }
 
 #Preview {
-	MoreView()
+	let locationManager = VisitLocationManager()
+	let friendsStore = FriendsStore()
+	let mapFriendsStore = MapFriendsStore()
+	let locationSharing = LocationSharingService()
+	return MoreView()
 		.environment(AuthSession())
-		.environment(FriendsStore())
-		.environment(MapFriendsStore())
-		.environment(LocationSharingService())
+		.environment(friendsStore)
+		.environment(mapFriendsStore)
+		.environment(locationSharing)
+		.environment(
+			BackgroundProximityController(
+				locationManager: locationManager,
+				locationSharing: locationSharing,
+				friendsStore: friendsStore,
+				mapFriendsStore: mapFriendsStore
+			)
+		)
 		.environment(RealtimeClient())
 }

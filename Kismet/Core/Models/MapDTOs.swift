@@ -67,6 +67,11 @@ struct RedeemInviteRequestDTO: Encodable, Sendable {
 	var inviteCode: String
 }
 
+struct BumpPairRequestDTO: Encodable, Sendable {
+	var peerUserId: String
+	var peerPublicKey: String?
+}
+
 // MARK: - Blobs
 
 struct BlobUploadRequestDTO: Encodable, Sendable {

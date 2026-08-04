@@ -37,3 +37,13 @@ kismet:
     ttl-hours: ${BLOB_TTL_HOURS:12}
     max-ciphertext-bytes: ${BLOB_MAX_CIPHERTEXT_BYTES:4096}
     max-batch-size: ${BLOB_MAX_BATCH_SIZE:500}
+  apns:
+    # Silent push wake for LOCATION blobs. Leave enabled=false for local demos without a .p8 key.
+    enabled: ${APNS_ENABLED:false}
+    key-id: ${APNS_KEY_ID:}
+    team-id: ${APNS_TEAM_ID:}
+    # Prefer key-path on disk; key-p8 can hold the PEM inline for hosted demos.
+    key-path: ${APNS_KEY_PATH:}
+    key-p8: ${APNS_KEY_P8:}
+    bundle-id: ${APNS_BUNDLE_ID:sanjivanand.IndeKismet}
+    production: ${APNS_PRODUCTION:false}

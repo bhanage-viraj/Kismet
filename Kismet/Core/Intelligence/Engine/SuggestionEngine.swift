@@ -49,7 +49,12 @@ final class SuggestionEngine {
 
 		let ranked = ranker.rank(context: context)
 		guard !ranked.isEmpty else {
-			store.replace(cards: [], usedModel: false, status: "No nearby opportunities right now.")
+			store.replace(
+				cards: [],
+				usedModel: false,
+				status: "No nearby opportunities right now.",
+				userCoordinate: coordinate
+			)
 			return
 		}
 
@@ -61,17 +66,19 @@ final class SuggestionEngine {
 					store.replace(
 						cards: FallbackComposer.cards(from: ranked),
 						usedModel: false,
-						status: gateway.availabilityMessage()
+						status: gateway.availabilityMessage(),
+						userCoordinate: coordinate
 					)
 				} else {
-					store.replace(cards: cards, usedModel: true, status: nil)
+					store.replace(cards: cards, usedModel: true, status: nil, userCoordinate: coordinate)
 				}
 				return
 			} catch {
 				store.replace(
 					cards: FallbackComposer.cards(from: ranked),
 					usedModel: false,
-					status: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+					status: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
+					userCoordinate: coordinate
 				)
 				return
 			}
@@ -80,7 +87,8 @@ final class SuggestionEngine {
 		store.replace(
 			cards: FallbackComposer.cards(from: ranked),
 			usedModel: false,
-			status: gateway.availabilityMessage()
+			status: gateway.availabilityMessage(),
+			userCoordinate: coordinate
 		)
 	}
 

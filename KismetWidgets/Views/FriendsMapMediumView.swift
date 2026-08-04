@@ -15,8 +15,9 @@ struct FriendsMapMediumView: View {
 	}
 
 	private var resolvedMapImage: UIImage? {
-		// Only trust the timeline entry — never pull a stale pin-filled cache here.
 		mapImage
+			?? WidgetAppGroup.loadCachedMapImage(for: .systemMedium)
+			?? WidgetAppGroup.loadCachedMapImage(for: .systemLarge)
 	}
 
 	var body: some View {

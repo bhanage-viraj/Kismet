@@ -44,6 +44,14 @@ private struct RootPreviewHost: View {
 			.environment(mapFriendsStore)
 			.environment(friendsStore)
 			.environment(locationSharing)
+			.environment(
+				BackgroundProximityController(
+					locationManager: locationManager,
+					locationSharing: locationSharing,
+					friendsStore: friendsStore,
+					mapFriendsStore: mapFriendsStore
+				)
+			)
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
 			.environment(pulsePublisher)

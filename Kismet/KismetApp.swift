@@ -7,15 +7,18 @@
 
 import SwiftData
 import SwiftUI
-import WidgetKit
 
 @main
 struct KismetApp: App {
+	@UIApplicationDelegateAdaptor(KismetAppDelegate.self) private var appDelegate
+	@Environment(\.scenePhase) private var scenePhase
+
 	@State private var authSession = AppEnvironment.shared.authSession
 	@State private var locationManager = AppEnvironment.shared.locationManager
 	@State private var mapFriendsStore = AppEnvironment.shared.mapFriendsStore
 	@State private var friendsStore = AppEnvironment.shared.friendsStore
 	@State private var locationSharing = AppEnvironment.shared.locationSharing
+	@State private var backgroundProximity = AppEnvironment.shared.backgroundProximity
 	@State private var realtimeClient = AppEnvironment.shared.realtimeClient
 	@State private var suggestionEngine = AppEnvironment.shared.suggestionEngine
 	@State private var pulsePublisher = AppEnvironment.shared.pulsePublisher
@@ -33,6 +36,7 @@ struct KismetApp: App {
 				.environment(mapFriendsStore)
 				.environment(friendsStore)
 				.environment(locationSharing)
+				.environment(backgroundProximity)
 				.environment(realtimeClient)
 				.environment(suggestionEngine)
 				.environment(pulsePublisher)
@@ -42,15 +46,31 @@ struct KismetApp: App {
 				.modelContainer(meetupContainer)
 				.task {
 					await authSession.restore()
-					// Drop leftover preview/demo widget seeds, then warm the map cache from real data only.
+					syncBackgroundProximity()
+					// Warm Friends Map from real App Group data, or an empty location-only map.
 					if let snapshot = AppGroup.loadSnapshot() {
 						WidgetMapSnapshotRenderer.refresh(from: snapshot)
 					} else {
-						WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.mapWidgetKind)
-						WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.widgetKind)
-						WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.meetupWidgetKind)
+						SuggestionSnapshotWriter.persistEmptyMap(
+							userCoordinate: locationManager.userCoordinate
+						)
 					}
 				}
+				.onChange(of: authSession.phase) { _, _ in
+					syncBackgroundProximity()
+				}
+				.onChange(of: scenePhase) { _, newPhase in
+					backgroundProximity.handleScenePhase(newPhase)
+				}
+		}
+	}
+
+	@MainActor
+	private func syncBackgroundProximity() {
+		if authSession.phase == .signedIn {
+			backgroundProximity.start()
+		} else {
+			backgroundProximity.stop()
 		}
 	}
 }

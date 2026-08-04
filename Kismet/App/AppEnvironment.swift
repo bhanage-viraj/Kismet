@@ -9,6 +9,7 @@ final class AppEnvironment {
 	let mapFriendsStore: MapFriendsStore
 	let friendsStore: FriendsStore
 	let locationSharing: LocationSharingService
+	let backgroundProximity: BackgroundProximityController
 	let realtimeClient: RealtimeClient
 	let suggestionEngine: SuggestionEngine
 	let pulsePublisher: PulsePublisher
@@ -33,10 +34,20 @@ final class AppEnvironment {
 	) {
 		self.apiClient = apiClient
 		self.authSession = authSession ?? AuthSession(client: apiClient)
-		self.locationManager = locationManager ?? VisitLocationManager()
-		self.mapFriendsStore = mapFriendsStore ?? MapFriendsStore(client: apiClient)
-		self.friendsStore = friendsStore ?? FriendsStore(client: apiClient)
-		self.locationSharing = locationSharing ?? LocationSharingService(client: apiClient)
+		let resolvedLocationManager = locationManager ?? VisitLocationManager()
+		let resolvedMapFriendsStore = mapFriendsStore ?? MapFriendsStore(client: apiClient)
+		let resolvedFriendsStore = friendsStore ?? FriendsStore(client: apiClient)
+		let resolvedLocationSharing = locationSharing ?? LocationSharingService(client: apiClient)
+		self.locationManager = resolvedLocationManager
+		self.mapFriendsStore = resolvedMapFriendsStore
+		self.friendsStore = resolvedFriendsStore
+		self.locationSharing = resolvedLocationSharing
+		self.backgroundProximity = BackgroundProximityController(
+			locationManager: resolvedLocationManager,
+			locationSharing: resolvedLocationSharing,
+			friendsStore: resolvedFriendsStore,
+			mapFriendsStore: resolvedMapFriendsStore
+		)
 		self.realtimeClient = realtimeClient ?? RealtimeClient()
 		self.suggestionEngine = suggestionEngine ?? SuggestionEngine()
 		self.pulsePublisher = pulsePublisher ?? PulsePublisher(client: apiClient)

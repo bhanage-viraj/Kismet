@@ -310,18 +310,30 @@ struct MainTabView: View {
 
 	@ViewBuilder
 	private var tabContent: some View {
-		switch selectedTab {
-		case .map:
+		// Keep MapKit mounted across tabs. Destroying `Map` mid-frame races Metal
+		// command buffers and trips MTLDebugDevice asserts in Debug.
+		ZStack {
 			MapHomeView()
-		case .radar:
-			RadarView(embedded: false)
+				.opacity(selectedTab == .map ? 1 : 0)
+				.allowsHitTesting(selectedTab == .map)
+				.accessibilityHidden(selectedTab != .map)
+
+			if selectedTab != .map {
+				Group {
+					switch selectedTab {
+					case .map:
+						EmptyView()
+					case .radar:
+						RadarView(embedded: false)
+					case .timeline:
+						TimelineView(embedded: false)
+					case .more:
+						MoreView(embedded: false)
+					}
+				}
 				.safeAreaPadding(.bottom, 88)
-		case .timeline:
-			TimelineView(embedded: false)
-				.safeAreaPadding(.bottom, 88)
-		case .more:
-			MoreView(embedded: false)
-				.safeAreaPadding(.bottom, 88)
+				.transition(.opacity)
+			}
 		}
 	}
 
@@ -433,6 +445,14 @@ private struct MainTabPreviewHost: View {
 			.environment(mapFriendsStore)
 			.environment(friendsStore)
 			.environment(locationSharing)
+			.environment(
+				BackgroundProximityController(
+					locationManager: locationManager,
+					locationSharing: locationSharing,
+					friendsStore: friendsStore,
+					mapFriendsStore: mapFriendsStore
+				)
+			)
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
 			.environment(pulsePublisher)

@@ -72,6 +72,106 @@ class FriendServiceTest {
 	}
 
 	@Test
+	void pairViaBumpCreatesActivePairMarkedBump() {
+		when(userService.requireById("user-1")).thenReturn(user("user-1", "Ada"));
+		UserDocument peer = user("user-9", "Grace");
+		peer.setPublicKey("grace-key");
+		peer.setKeyVersion(1);
+		when(userService.requireById("user-9")).thenReturn(peer);
+		when(friendPairRepository.findByUserAIdAndUserBId("user-1", "user-9")).thenReturn(Optional.empty());
+		when(friendPairRepository.save(any(FriendPairDocument.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0));
+
+		FriendSummary summary = friendService.pairViaBump("user-1", "user-9", "grace-key");
+
+		ArgumentCaptor<FriendPairDocument> captor = ArgumentCaptor.forClass(FriendPairDocument.class);
+		verify(friendPairRepository).save(captor.capture());
+		FriendPairDocument saved = captor.getValue();
+		assertEquals("user-1", saved.getUserAId());
+		assertEquals("user-9", saved.getUserBId());
+		assertEquals(PairStatus.ACTIVE, saved.getStatus());
+		assertEquals(ConnectedVia.BUMP, saved.getConnectedVia());
+		assertEquals("user-1", saved.getRequestedByUserId());
+
+		assertEquals("user-9", summary.userId());
+		assertEquals("Grace", summary.displayName());
+		assertEquals("grace-key", summary.publicKey());
+		assertEquals("BUMP", summary.connectedVia());
+		assertTrue(summary.initiatedByMe());
+		verify(eventPublisher).publishEvent(new FriendPairedEvent("user-1", "user-9"));
+	}
+
+	@Test
+	void pairViaBumpRejectsSelf() {
+		ApiException ex = assertThrows(ApiException.class,
+				() -> friendService.pairViaBump("user-1", "user-1", null));
+
+		assertEquals(HttpStatus.BAD_REQUEST, ex.getStatus());
+		verify(friendPairRepository, never()).save(any());
+	}
+
+	@Test
+	void pairViaBumpRejectsAlreadyActivePair() {
+		when(userService.requireById(anyString())).thenAnswer(i -> user(i.getArgument(0), "Someone"));
+		FriendPairDocument existing = FriendPairDocument.create(
+				"user-1", "user-9", ConnectedVia.BUMP, PairStatus.ACTIVE, Instant.now());
+		when(friendPairRepository.findByUserAIdAndUserBId("user-1", "user-9"))
+				.thenReturn(Optional.of(existing));
+
+		ApiException ex = assertThrows(ApiException.class,
+				() -> friendService.pairViaBump("user-1", "user-9", null));
+
+		assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+		verify(friendPairRepository, never()).save(any());
+	}
+
+	@Test
+	void pairViaBumpReactivatesARevokedPair() {
+		when(userService.requireById(anyString())).thenAnswer(i -> user(i.getArgument(0), "Someone"));
+		FriendPairDocument revoked = FriendPairDocument.create(
+				"user-1", "user-9", ConnectedVia.INVITE_CODE, PairStatus.ACTIVE, Instant.now());
+		revoked.setId("pair-1");
+		revoked.setStatus(PairStatus.REVOKED);
+		when(friendPairRepository.findByUserAIdAndUserBId("user-1", "user-9"))
+				.thenReturn(Optional.of(revoked));
+		when(friendPairRepository.save(any(FriendPairDocument.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0));
+
+		friendService.pairViaBump("user-9", "user-1", null);
+
+		ArgumentCaptor<FriendPairDocument> captor = ArgumentCaptor.forClass(FriendPairDocument.class);
+		verify(friendPairRepository).save(captor.capture());
+		assertEquals("pair-1", captor.getValue().getId());
+		assertEquals(PairStatus.ACTIVE, captor.getValue().getStatus());
+		assertEquals(ConnectedVia.BUMP, captor.getValue().getConnectedVia());
+	}
+
+	@Test
+	void pairViaBumpRejectsMismatchedPeerPublicKey() {
+		UserDocument peer = user("user-9", "Grace");
+		peer.setPublicKey("published-key");
+		when(userService.requireById("user-1")).thenReturn(user("user-1", "Ada"));
+		when(userService.requireById("user-9")).thenReturn(peer);
+
+		ApiException ex = assertThrows(ApiException.class,
+				() -> friendService.pairViaBump("user-1", "user-9", "spoofed-key"));
+
+		assertEquals(HttpStatus.CONFLICT, ex.getStatus());
+		verify(friendPairRepository, never()).save(any());
+	}
+
+	@Test
+	void pairViaBumpAllowsMissingPublishedKeyWhenClientSendsOne() {
+		when(userService.requireById("user-1")).thenReturn(user("user-1", "Ada"));
+		when(userService.requireById("user-9")).thenReturn(user("user-9", "Grace"));
+		when(friendPairRepository.findByUserAIdAndUserBId("user-1", "user-9")).thenReturn(Optional.empty());
+		when(friendPairRepository.save(any(FriendPairDocument.class)))
+				.thenAnswer(invocation -> invocation.getArgument(0));
+
+		assertNotNull(friendService.pairViaBump("user-1", "user-9", "grace-pending-key"));
+	}
+
+	@Test
 	void redeemCreatesActivePairWithCanonicallyOrderedIds() {
 		// "user-9" redeems a code owned by "user-1", so the requester sorts second.
 		givenValidInviteCode("ABCD1234", "user-1");

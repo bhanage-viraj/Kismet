@@ -4,6 +4,11 @@ import MapKit
 import Observation
 import UIKit
 
+enum LocationSceneMode {
+	case active
+	case background
+}
+
 @Observable
 @MainActor
 final class VisitLocationManager: NSObject {
@@ -13,6 +18,10 @@ final class VisitLocationManager: NSObject {
 	private(set) var placeName: String?
 	private(set) var lastErrorMessage: String?
 	private(set) var isUpdating = false
+	private(set) var isMonitoringSignificantChanges = false
+
+	/// Invoked on every accepted fix (foreground continuous or background significant-change).
+	var onLocationUpdate: ((CLLocation) -> Void)?
 
 	var hasFix: Bool { userCoordinate != nil }
 
@@ -23,6 +32,10 @@ final class VisitLocationManager: NSObject {
 		default:
 			return false
 		}
+	}
+
+	var isAlwaysAuthorized: Bool {
+		authorizationStatus == .authorizedAlways
 	}
 
 	var needsPermissionPrompt: Bool {
@@ -63,6 +76,7 @@ final class VisitLocationManager: NSObject {
 	private let manager = CLLocationManager()
 	private var geocodeTask: Task<Void, Never>?
 	private var lastGeocodedLocation: CLLocation?
+	private let alwaysPromptDefaultsKey = "location.didRequestAlwaysAuthorization"
 
 	override init() {
 		authorizationStatus = manager.authorizationStatus
@@ -70,11 +84,23 @@ final class VisitLocationManager: NSObject {
 		manager.delegate = self
 		manager.desiredAccuracy = kCLLocationAccuracyNearestTenMeters
 		manager.distanceFilter = 15
+		manager.pausesLocationUpdatesAutomatically = true
+		// Significant-change wakes do not need continuous background GPS; keep this false.
+		manager.allowsBackgroundLocationUpdates = false
 	}
 
 	func requestWhenInUseAuthorization() {
 		guard authorizationStatus == .notDetermined else { return }
 		manager.requestWhenInUseAuthorization()
+	}
+
+	/// Upgrade path after When In Use — required before significant-change monitoring works reliably.
+	func requestAlwaysAuthorizationIfNeeded() {
+		authorizationStatus = manager.authorizationStatus
+		guard authorizationStatus == .authorizedWhenInUse else { return }
+		guard !UserDefaults.standard.bool(forKey: alwaysPromptDefaultsKey) else { return }
+		UserDefaults.standard.set(true, forKey: alwaysPromptDefaultsKey)
+		manager.requestAlwaysAuthorization()
 	}
 
 	func startUpdating() {
@@ -94,6 +120,40 @@ final class VisitLocationManager: NSObject {
 		manager.stopUpdatingLocation()
 	}
 
+	/// Battery-friendly background path: cell/Wi‑Fi handoffs wake the app to republish location.
+	func startSignificantLocationMonitoring() {
+		authorizationStatus = manager.authorizationStatus
+		guard isAuthorized else { return }
+		guard CLLocationManager.significantLocationChangeMonitoringAvailable() else { return }
+		manager.startMonitoringSignificantLocationChanges()
+		isMonitoringSignificantChanges = true
+	}
+
+	func stopSignificantLocationMonitoring() {
+		manager.stopMonitoringSignificantLocationChanges()
+		isMonitoringSignificantChanges = false
+	}
+
+	/// Foreground: precise continuous GPS. Background: drop continuous, keep significant-change.
+	func applySceneMode(_ mode: LocationSceneMode) {
+		authorizationStatus = manager.authorizationStatus
+		guard isAuthorized else { return }
+
+		switch mode {
+		case .active:
+			startUpdating()
+			requestAlwaysAuthorizationIfNeeded()
+			if isAlwaysAuthorized {
+				startSignificantLocationMonitoring()
+			}
+		case .background:
+			stopUpdating()
+			if isAlwaysAuthorized {
+				startSignificantLocationMonitoring()
+			}
+		}
+	}
+
 	func prepareForMapAppearance() {
 		authorizationStatus = manager.authorizationStatus
 		if KismetRuntime.isXcodePreview {
@@ -104,7 +164,16 @@ final class VisitLocationManager: NSObject {
 			requestWhenInUseAuthorization()
 		} else if isAuthorized {
 			startUpdating()
+			requestAlwaysAuthorizationIfNeeded()
+			if isAlwaysAuthorized {
+				startSignificantLocationMonitoring()
+			}
 		}
+	}
+
+	func tearDownBackgroundMonitoring() {
+		stopUpdating()
+		stopSignificantLocationMonitoring()
 	}
 }
 
@@ -114,8 +183,12 @@ extension VisitLocationManager: CLLocationManagerDelegate {
 			authorizationStatus = manager.authorizationStatus
 			if isAuthorized {
 				startUpdating()
+				requestAlwaysAuthorizationIfNeeded()
+				if isAlwaysAuthorized {
+					startSignificantLocationMonitoring()
+				}
 			} else if isDenied {
-				stopUpdating()
+				tearDownBackgroundMonitoring()
 			}
 		}
 	}
@@ -128,6 +201,7 @@ extension VisitLocationManager: CLLocationManagerDelegate {
 			lastErrorMessage = nil
 			scheduleReverseGeocode(for: location)
 			MeetupLiveActivityTracker.handleLocationUpdate(location)
+			onLocationUpdate?(location)
 		}
 	}
 

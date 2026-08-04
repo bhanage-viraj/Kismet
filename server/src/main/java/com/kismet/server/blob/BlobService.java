@@ -22,6 +22,7 @@ import com.kismet.server.blob.dto.CreateBlobRequest;
 import com.kismet.server.blob.dto.PendingBlob;
 import com.kismet.server.common.ApiException;
 import com.kismet.server.friend.FriendService;
+import com.kismet.server.push.PushWakeService;
 import com.kismet.server.realtime.RealtimeEventPublisher;
 
 @Service
@@ -31,6 +32,7 @@ public class BlobService {
 	private final MongoTemplate mongoTemplate;
 	private final FriendService friendService;
 	private final RealtimeEventPublisher realtimeEventPublisher;
+	private final PushWakeService pushWakeService;
 	private final Duration ttl;
 	private final int maxCiphertextBytes;
 	private final int maxBatchSize;
@@ -40,6 +42,7 @@ public class BlobService {
 			MongoTemplate mongoTemplate,
 			FriendService friendService,
 			RealtimeEventPublisher realtimeEventPublisher,
+			PushWakeService pushWakeService,
 			@Value("${kismet.blobs.ttl-hours:12}") long ttlHours,
 			@Value("${kismet.blobs.max-ciphertext-bytes:4096}") int maxCiphertextBytes,
 			@Value("${kismet.blobs.max-batch-size:500}") int maxBatchSize) {
@@ -47,6 +50,7 @@ public class BlobService {
 		this.mongoTemplate = mongoTemplate;
 		this.friendService = friendService;
 		this.realtimeEventPublisher = realtimeEventPublisher;
+		this.pushWakeService = pushWakeService;
 		this.ttl = Duration.ofHours(ttlHours);
 		this.maxCiphertextBytes = maxCiphertextBytes;
 		this.maxBatchSize = maxBatchSize;
@@ -107,9 +111,20 @@ public class BlobService {
 		}
 
 		upsertAll(blobs, now);
-		realtimeEventPublisher.blobsAvailable(
-				blobs.stream().map(EncryptedBlobDocument::getRecipientUserId).distinct().toList(),
-				senderUserId);
+		List<String> recipients = blobs.stream()
+				.map(EncryptedBlobDocument::getRecipientUserId)
+				.distinct()
+				.toList();
+		realtimeEventPublisher.blobsAvailable(recipients, senderUserId);
+
+		List<String> locationRecipients = blobs.stream()
+				.filter(blob -> blob.getKind() == BlobKind.LOCATION)
+				.map(EncryptedBlobDocument::getRecipientUserId)
+				.distinct()
+				.toList();
+		if (!locationRecipients.isEmpty()) {
+			pushWakeService.wakeRecipientsForLocationBlob(locationRecipients, senderUserId);
+		}
 		return new BlobUploadResponse(blobs.size(), expiresAt);
 	}
 

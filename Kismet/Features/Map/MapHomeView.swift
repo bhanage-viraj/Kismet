@@ -8,6 +8,7 @@ struct MapHomeView: View {
 	@Environment(MapFriendsStore.self) private var friendsStore
 	@Environment(FriendsStore.self) private var pairedFriends
 	@Environment(LocationSharingService.self) private var locationSharing
+	@Environment(BackgroundProximityController.self) private var backgroundProximity
 	@Environment(RealtimeClient.self) private var realtimeClient
 	@Environment(SuggestionEngine.self) private var suggestionEngine
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
@@ -254,7 +255,10 @@ struct MapHomeView: View {
 		defer {
 			realtime.onMapEvent = nil
 			realtime.disconnect()
-			sharing.stop()
+			// Background proximity owns sharing while signed in; don't kill uploads on tab leave.
+			if !backgroundProximity.isEnabled {
+				sharing.stop()
+			}
 		}
 
 		await bootstrapMap()
@@ -370,6 +374,14 @@ private struct MapHomePreviewHost: View {
 			.environment(friendsStore)
 			.environment(pairedFriends)
 			.environment(locationSharing)
+			.environment(
+				BackgroundProximityController(
+					locationManager: locationManager,
+					locationSharing: locationSharing,
+					friendsStore: pairedFriends,
+					mapFriendsStore: friendsStore
+				)
+			)
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
 			.environment(mapWeather)

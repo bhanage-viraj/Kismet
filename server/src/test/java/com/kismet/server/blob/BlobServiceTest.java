@@ -25,6 +25,7 @@ import com.kismet.server.blob.dto.CreateBlobRequest;
 import com.kismet.server.blob.dto.PendingBlob;
 import com.kismet.server.common.ApiException;
 import com.kismet.server.friend.FriendService;
+import com.kismet.server.push.PushWakeService;
 import com.kismet.server.realtime.RealtimeEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,12 +46,15 @@ class BlobServiceTest {
 	@Mock
 	private RealtimeEventPublisher realtimeEventPublisher;
 
+	@Mock
+	private PushWakeService pushWakeService;
+
 	private BlobService blobService;
 
 	@BeforeEach
 	void setUp() {
 		blobService = new BlobService(
-				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, 12, 4096, 500);
+				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, pushWakeService, 12, 4096, 500);
 	}
 
 	@Test
@@ -66,6 +70,7 @@ class BlobServiceTest {
 		verify(bulkOperations, org.mockito.Mockito.times(2)).upsert(any(), any());
 		verify(bulkOperations).execute();
 		verify(realtimeEventPublisher).blobsAvailable(List.of("friend-a", "friend-b"), "user-1");
+		verify(pushWakeService).wakeRecipientsForLocationBlob(List.of("friend-a", "friend-b"), "user-1");
 	}
 
 	@Test
@@ -136,7 +141,7 @@ class BlobServiceTest {
 	@Test
 	void uploadRejectsOversizedCiphertext() {
 		blobService = new BlobService(
-				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, 12, 8, 500);
+				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, pushWakeService, 12, 8, 500);
 		givenFriends("user-1", "friend-a");
 
 		ApiException ex = assertThrows(ApiException.class, () -> blobService.upload("user-1", List.of(
@@ -148,7 +153,7 @@ class BlobServiceTest {
 	@Test
 	void uploadRejectsAnOversizedBatch() {
 		blobService = new BlobService(
-				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, 12, 4096, 1);
+				blobRepository, mongoTemplate, friendService, realtimeEventPublisher, pushWakeService, 12, 4096, 1);
 
 		ApiException ex = assertThrows(ApiException.class, () -> blobService.upload("user-1", List.of(
 				new CreateBlobRequest("friend-a", "LOCATION", "cipher-1", 1),
