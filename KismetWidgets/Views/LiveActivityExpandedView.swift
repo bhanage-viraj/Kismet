@@ -37,6 +37,7 @@ struct MeetupActivityExpandedContent: View {
 	let state: MeetupActivityAttributes.ContentState
 	var showsHeader: Bool = true
 	var showsCollapseControl: Bool = false
+	var showsEndControl: Bool = false
 	var compact: Bool = false
 
 	var body: some View {
@@ -45,8 +46,24 @@ struct MeetupActivityExpandedContent: View {
 				MeetupActivityExpandedHeader(
 					attributes: attributes,
 					showsCollapseControl: showsCollapseControl,
+					showsEndControl: showsEndControl || showsCollapseControl,
 					compact: compact
 				)
+			} else if showsEndControl {
+				HStack {
+					Spacer(minLength: 0)
+					Button(intent: EndMeetupLiveActivityIntent()) {
+						Text("End")
+							.font(.system(size: 12, weight: .semibold))
+							.foregroundStyle(.white)
+							.padding(.horizontal, 10)
+							.padding(.vertical, 5)
+							.background(Capsule().fill(Color.red.opacity(0.85)))
+							.contentShape(Capsule())
+					}
+					.buttonStyle(.plain)
+					.accessibilityLabel("End meetup")
+				}
 			}
 			MeetupActivityExpandedStats(state: state, compact: compact)
 			JourneyProgressTrack(progress: state.progress)
@@ -58,6 +75,7 @@ struct MeetupActivityExpandedContent: View {
 struct MeetupActivityExpandedHeader: View {
 	let attributes: MeetupActivityAttributes
 	var showsCollapseControl: Bool = false
+	var showsEndControl: Bool = false
 	var compact: Bool = false
 
 	private var chipSize: CGFloat { compact ? 24 : 28 }
@@ -80,6 +98,20 @@ struct MeetupActivityExpandedHeader: View {
 				.minimumScaleFactor(0.75)
 
 			Spacer(minLength: 4)
+
+			if showsEndControl {
+				Button(intent: EndMeetupLiveActivityIntent()) {
+					Text("End")
+						.font(.system(size: 12, weight: .semibold))
+						.foregroundStyle(.white)
+						.padding(.horizontal, 10)
+						.padding(.vertical, 6)
+						.background(Capsule().fill(Color.red.opacity(0.85)))
+						.contentShape(Capsule())
+				}
+				.buttonStyle(.plain)
+				.accessibilityLabel("End meetup")
+			}
 
 			if showsCollapseControl {
 				Button(intent: CollapseMeetupLiveActivityIntent()) {
@@ -174,6 +206,17 @@ struct MeetupActivityExpandedEnded: View {
 					.foregroundStyle(.secondary)
 			}
 			Spacer(minLength: 0)
+
+			Button(intent: EndMeetupLiveActivityIntent()) {
+				Image(systemName: "xmark")
+					.font(.system(size: 11, weight: .bold))
+					.foregroundStyle(.secondary)
+					.frame(width: 26, height: 26)
+					.background(Circle().fill(Color.primary.opacity(0.08)))
+					.contentShape(Circle())
+			}
+			.buttonStyle(.plain)
+			.accessibilityLabel("Dismiss")
 		}
 	}
 }

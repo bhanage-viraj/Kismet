@@ -6,6 +6,8 @@ struct PresenceModePicker: View {
 	@Binding var selection: PresenceState
 	@Binding var isExpanded: Bool
 	var buttonSize: CGFloat = KismetTheme.Chrome.avatarSize
+	/// Fired when the user picks Friends Only so the host can present the subset sheet.
+	var onSelectFriendsOnly: (() -> Void)? = nil
 
 	@Environment(\.accessibilityReduceMotion) private var reduceMotion
 
@@ -28,9 +30,16 @@ struct PresenceModePicker: View {
 					withAnimation(animation) {
 						isExpanded = false
 					}
+					if selection == .friendsOnly {
+						onSelectFriendsOnly?()
+					}
 				}
 				.accessibilityLabel("Presence, \(selection.title), selected")
-				.accessibilityHint("Collapses options")
+				.accessibilityHint(
+					selection == .friendsOnly
+						? "Collapses options. Double tap again from the menu to edit who can see you."
+						: "Collapses options"
+				)
 
 				ForEach(otherStates, id: \.self) { state in
 					optionRow(for: state, isSelected: false) {
@@ -38,6 +47,9 @@ struct PresenceModePicker: View {
 						withAnimation(animation) {
 							selection = state
 							isExpanded = false
+						}
+						if state == .friendsOnly {
+							onSelectFriendsOnly?()
 						}
 					}
 					.transition(

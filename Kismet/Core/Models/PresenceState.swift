@@ -21,7 +21,7 @@ enum PresenceState: String, Codable, Hashable, Sendable, CaseIterable {
 	var subtitle: String {
 		switch self {
 		case .available: "Open to hang"
-		case .friendsOnly: "Friends can see you"
+		case .friendsOnly: "Chosen friends can see you"
 		case .approximate: "Rough location only"
 		case .eclipse: "Hidden from everyone"
 		}

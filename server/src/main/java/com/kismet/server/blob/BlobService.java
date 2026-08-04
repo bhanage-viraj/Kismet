@@ -119,6 +119,7 @@ public class BlobService {
 
 		wakeForKind(blobs, BlobKind.LOCATION, senderUserId);
 		wakeForKind(blobs, BlobKind.PULSE, senderUserId);
+		wakeForKind(blobs, BlobKind.MEETUP, senderUserId);
 		return new BlobUploadResponse(blobs.size(), expiresAt);
 	}
 

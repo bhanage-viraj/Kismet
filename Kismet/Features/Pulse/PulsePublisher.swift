@@ -4,12 +4,14 @@ import Observation
 enum PulsePublisherError: LocalizedError {
 	case missingUser
 	case noRecipients
+	case recipientUnavailable
 	case uploadFailed(String)
 
 	var errorDescription: String? {
 		switch self {
 		case .missingUser: "Sign in to send a Pulse."
 		case .noRecipients: "No eligible friends to receive this Pulse."
+		case .recipientUnavailable: "That friend isn’t available for a Pulse right now."
 		case .uploadFailed(let message): message
 		}
 	}
@@ -42,6 +44,10 @@ final class PulsePublisher {
 		isSending = true
 		lastErrorMessage = nil
 		defer { isSending = false }
+
+		guard PulseTargeting.isEligibleRecipient(for: suggestion) else {
+			throw PulsePublisherError.recipientUnavailable
+		}
 
 		let expiresAt = Date().addingTimeInterval(45 * 60)
 		let payload = PulsePayloadDTO(

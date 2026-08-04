@@ -41,6 +41,7 @@ struct MeetupLiveActivity: Widget {
 						state: context.state,
 						showsHeader: false,
 						showsCollapseControl: false,
+						showsEndControl: !context.state.isEnded,
 						compact: true
 					)
 					.padding(.horizontal, 4)
@@ -87,6 +88,7 @@ struct MeetupLiveActivity: Widget {
 		} else {
 			Button(intent: ExpandMeetupLiveActivityIntent()) {
 				MeetupActivityCompactView(attributes: context.attributes, state: context.state)
+					.contentShape(Rectangle())
 			}
 			.buttonStyle(.plain)
 		}

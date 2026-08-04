@@ -464,6 +464,7 @@ private struct MainTabPreviewHost: View {
 	)
 	@State private var interestSuggestionStore = InterestSuggestionStore()
 	@State private var presenceMode = PresenceModeStore(state: .available)
+	@State private var friendsOnlyVisibility = FriendsOnlyVisibilityStore()
 
 	var body: some View {
 		MainTabView()
@@ -478,7 +479,8 @@ private struct MainTabPreviewHost: View {
 					locationSharing: locationSharing,
 					friendsStore: friendsStore,
 					mapFriendsStore: mapFriendsStore,
-					presenceMode: presenceMode
+					presenceMode: presenceMode,
+					friendsOnlyVisibility: friendsOnlyVisibility
 				)
 			)
 			.environment(realtimeClient)
@@ -489,6 +491,7 @@ private struct MainTabPreviewHost: View {
 			.environment(meetupMemoryStore)
 			.environment(interestSuggestionStore)
 			.environment(presenceMode)
+			.environment(friendsOnlyVisibility)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 				await suggestionEngine.refresh(

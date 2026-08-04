@@ -20,6 +20,7 @@ final class AppEnvironment {
 	let meetupMemoryStore: MeetupMemoryStore
 	let interestSuggestionStore: InterestSuggestionStore
 	let presenceMode: PresenceModeStore
+	let friendsOnlyVisibility: FriendsOnlyVisibilityStore
 	/// Last Pulse draft prepared by Intelligence / Siri (not sent until confirm).
 	var pendingPulseDraft: PulseDraft?
 
@@ -37,7 +38,8 @@ final class AppEnvironment {
 		mapWeather: MapWeatherController? = nil,
 		weatherObstacles: WeatherObstacleStore? = nil,
 		meetupModelContainer: ModelContainer? = nil,
-		presenceMode: PresenceModeStore? = nil
+		presenceMode: PresenceModeStore? = nil,
+		friendsOnlyVisibility: FriendsOnlyVisibilityStore? = nil
 	) {
 		self.apiClient = apiClient
 		self.authSession = authSession ?? AuthSession(client: apiClient)
@@ -46,17 +48,20 @@ final class AppEnvironment {
 		let resolvedFriendsStore = friendsStore ?? FriendsStore(client: apiClient)
 		let resolvedLocationSharing = locationSharing ?? LocationSharingService(client: apiClient)
 		let resolvedPresenceMode = presenceMode ?? PresenceModeStore()
+		let resolvedFriendsOnly = friendsOnlyVisibility ?? FriendsOnlyVisibilityStore()
 		self.locationManager = resolvedLocationManager
 		self.mapFriendsStore = resolvedMapFriendsStore
 		self.friendsStore = resolvedFriendsStore
 		self.locationSharing = resolvedLocationSharing
 		self.presenceMode = resolvedPresenceMode
+		self.friendsOnlyVisibility = resolvedFriendsOnly
 		self.backgroundProximity = BackgroundProximityController(
 			locationManager: resolvedLocationManager,
 			locationSharing: resolvedLocationSharing,
 			friendsStore: resolvedFriendsStore,
 			mapFriendsStore: resolvedMapFriendsStore,
-			presenceMode: resolvedPresenceMode
+			presenceMode: resolvedPresenceMode,
+			friendsOnlyVisibility: resolvedFriendsOnly
 		)
 		self.realtimeClient = realtimeClient ?? RealtimeClient()
 		self.suggestionEngine = suggestionEngine ?? SuggestionEngine()

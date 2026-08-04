@@ -15,6 +15,7 @@ struct MapHomeView: View {
 	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
 	@Environment(MapWeatherController.self) private var mapWeather
 	@Environment(PresenceModeStore.self) private var presenceMode
+	@Environment(FriendsOnlyVisibilityStore.self) private var friendsOnlyVisibility
 	@Environment(PulseInboxStore.self) private var pulseInbox
 
 	@State private var cameraPosition: MapCameraPosition = .region(
@@ -27,6 +28,7 @@ struct MapHomeView: View {
 	@State private var ctaToast: String?
 	@State private var didCenterOnUser = false
 	@State private var isPresencePickerExpanded = false
+	@State private var showFriendsOnlyPicker = false
 
 	private var displayName: String {
 		authSession.preferredDisplayName
@@ -140,6 +142,11 @@ struct MapHomeView: View {
 			withAnimation(.snappy) { isPresencePickerExpanded = false }
 			publishLocation(force: true)
 		}
+		.sheet(isPresented: $showFriendsOnlyPicker) {
+			FriendsOnlyPickerSheet {
+				publishLocation(force: true)
+			}
+		}
 		.overlay(alignment: .top) {
 			if let ctaToast {
 				Text(ctaToast)
@@ -203,7 +210,8 @@ struct MapHomeView: View {
 		.overlay(alignment: .topTrailing) {
 			PresenceModePicker(
 				selection: Bindable(presenceMode).state,
-				isExpanded: $isPresencePickerExpanded
+				isExpanded: $isPresencePickerExpanded,
+				onSelectFriendsOnly: { showFriendsOnlyPicker = true }
 			)
 			.padding(.top, 10)
 			.padding(.trailing, 14)
@@ -253,6 +261,7 @@ struct MapHomeView: View {
 				case "blob.available":
 					await mapStore.refresh(around: locations.displayCoordinate)
 					await pulseInbox.refresh(friends: socialStore.friends)
+					await consumeSharedMeetups()
 					await refreshSuggestions()
 				case "friend.pair.created":
 					await socialStore.refresh()
@@ -262,6 +271,7 @@ struct MapHomeView: View {
 						senderUserId: KeychainStore.get(.userId),
 						friends: socialStore.friends,
 						presence: presenceMode.state,
+						friendsOnlyVisibleIds: friendsOnlyVisibility.visibleFriendIds,
 						force: true
 					)
 					await pulseInbox.refresh(friends: socialStore.friends)
@@ -335,6 +345,7 @@ struct MapHomeView: View {
 		await pairedFriends.refresh()
 		await friendsStore.refresh(around: locationManager.displayCoordinate)
 		await pulseInbox.refresh(friends: pairedFriends.friends)
+		await consumeSharedMeetups()
 		await refreshSuggestions()
 	}
 
@@ -349,8 +360,29 @@ struct MapHomeView: View {
 			outcome: .pending
 		)
 		await startLiveActivity(for: pulse)
+		await notifySenderOfMeetupAccept(pulse)
 		let venue = pulse.payload.venueName.map { " · \($0)" } ?? ""
 		showToast("Accepted \(pulse.senderDisplayName)'s Pulse\(venue)")
+	}
+
+	@MainActor
+	private func notifySenderOfMeetupAccept(_ pulse: IncomingPulse) async {
+		guard let myId = authSession.user?.id ?? KeychainStore.get(.userId) else { return }
+		let payload = MeetupPayloadDTO(
+			meetupId: pulse.payload.pulseId,
+			title: pulse.payload.label,
+			venueName: pulse.payload.venueName,
+			meetAt: pulse.payload.expiresAt,
+			peerDisplayName: authSession.preferredDisplayName,
+			systemImage: "figure.walk",
+			createdAt: Date()
+		)
+		await MeetupSharingService().notifyPeerOfAccept(
+			payload: payload,
+			senderUserId: myId,
+			peerUserId: pulse.senderUserId,
+			friends: pairedFriends.friends
+		)
 	}
 
 	@MainActor
@@ -390,6 +422,56 @@ struct MapHomeView: View {
 	}
 
 	@MainActor
+	private func startLiveActivityFromMeetup(
+		senderUserId: String,
+		payload: MeetupPayloadDTO
+	) async {
+		let peerName = pairedFriends.friends.first(where: { $0.userId == senderUserId })?.displayName
+			?? payload.peerDisplayName
+		let youName = authSession.preferredDisplayName
+		let venueName = payload.venueName ?? payload.title
+		let participants: [MeetupActivityAttributes.Participant] = [
+			.init(
+				id: KeychainStore.get(.userId) ?? "you",
+				displayName: youName,
+				initials: String(youName.prefix(1)).uppercased(),
+				status: .nearby,
+				isYou: true
+			),
+			.init(
+				id: senderUserId,
+				displayName: peerName,
+				initials: String(peerName.prefix(1)).uppercased(),
+				status: .free,
+				isYou: false
+			)
+		]
+		do {
+			_ = try await MeetupLiveActivityController.start(
+				meetupID: payload.meetupId,
+				title: payload.title,
+				venueName: venueName,
+				systemImage: payload.systemImage,
+				participants: participants,
+				venueCoordinate: nil,
+				meetAt: payload.meetAt,
+				currentLocation: locationManager.userLocation
+			)
+			showToast("\(peerName) accepted — meetup Live Activity started")
+		} catch {
+			// Disabled or already active — ignore.
+		}
+	}
+
+	@MainActor
+	private func consumeSharedMeetups() async {
+		let meetups = await MeetupSharingService().consumePendingMeetups(friends: pairedFriends.friends)
+		for item in meetups {
+			await startLiveActivityFromMeetup(senderUserId: item.senderUserId, payload: item.payload)
+		}
+	}
+
+	@MainActor
 	private func refreshSuggestions() async {
 		let learned = meetupMemoryStore.buildLearnedSlice()
 		await suggestionEngine.refresh(
@@ -413,6 +495,7 @@ struct MapHomeView: View {
 			senderUserId: authSession.user?.id ?? KeychainStore.get(.userId),
 			friends: pairedFriends.friends,
 			presence: presenceMode.state,
+			friendsOnlyVisibleIds: friendsOnlyVisibility.visibleFriendIds,
 			force: force
 		)
 	}
@@ -466,6 +549,7 @@ private struct MapHomePreviewHost: View {
 	)
 	@State private var interestSuggestionStore = InterestSuggestionStore()
 	@State private var presenceMode = PresenceModeStore(state: .available)
+	@State private var friendsOnlyVisibility = FriendsOnlyVisibilityStore()
 	@State private var pulseInbox = PulseInboxStore()
 
 	var body: some View {
@@ -481,7 +565,8 @@ private struct MapHomePreviewHost: View {
 					locationSharing: locationSharing,
 					friendsStore: pairedFriends,
 					mapFriendsStore: friendsStore,
-					presenceMode: presenceMode
+					presenceMode: presenceMode,
+					friendsOnlyVisibility: friendsOnlyVisibility
 				)
 			)
 			.environment(realtimeClient)
@@ -491,6 +576,7 @@ private struct MapHomePreviewHost: View {
 			.environment(meetupMemoryStore)
 			.environment(interestSuggestionStore)
 			.environment(presenceMode)
+			.environment(friendsOnlyVisibility)
 			.environment(pulseInbox)
 			.task {
 				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
