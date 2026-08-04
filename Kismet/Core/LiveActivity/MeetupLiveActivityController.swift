@@ -6,8 +6,15 @@ import Foundation
 /// Lock Screen always starts compact (`isExpanded: false`); the user taps to expand.
 /// ETA / distance refresh via `MeetupLiveActivityTracker` as location updates arrive.
 /// Uses ActivityKit push tokens so the peer's device can receive ContentState updates.
+/// Auto-ends at `meetAt` (plus a short grace) or after a max lifetime if no meet time.
 @MainActor
 enum MeetupLiveActivityController {
+	private static var autoEndTask: Task<Void, Never>?
+	/// Grace after `meetAt` before force-dismissing.
+	private static let meetAtGrace: TimeInterval = 2 * 60
+	/// Fallback when `meetAt` is missing — don't leave LAs forever.
+	private static let maxLifetime: TimeInterval = 2 * 60 * 60
+
 	@discardableResult
 	static func start(
 		attributes: MeetupActivityAttributes,
@@ -17,6 +24,7 @@ enum MeetupLiveActivityController {
 			throw ControllerError.disabled
 		}
 
+		autoEndTask?.cancel()
 		for activity in Activity<MeetupActivityAttributes>.activities {
 			await activity.end(nil, dismissalPolicy: .immediate)
 		}
@@ -34,6 +42,7 @@ enum MeetupLiveActivityController {
 		Task {
 			await observePushToken(for: activity)
 		}
+		scheduleAutoEnd(for: activity)
 		return activity
 	}
 
@@ -139,7 +148,9 @@ enum MeetupLiveActivityController {
 		}
 	}
 
-	static func end(dismissalPolicy: ActivityUIDismissalPolicy = .default) async {
+	static func end(dismissalPolicy: ActivityUIDismissalPolicy = .immediate) async {
+		autoEndTask?.cancel()
+		autoEndTask = nil
 		let final = ActivityContent(
 			state: MeetupActivityAttributes.ContentState.ended,
 			staleDate: nil
@@ -155,6 +166,49 @@ enum MeetupLiveActivityController {
 				event: "end"
 			)
 			await activity.end(final, dismissalPolicy: dismissalPolicy)
+		}
+	}
+
+	/// Ends any active meetup whose `meetAt` (+ grace) has passed. Safe to call often.
+	static func endExpiredIfNeeded() async {
+		guard hasActiveMeetup else { return }
+		let now = Date()
+		var shouldEnd = false
+		for activity in Activity<MeetupActivityAttributes>.activities {
+			if let meetAt = activity.attributes.meetAt {
+				if now >= meetAt.addingTimeInterval(meetAtGrace) {
+					shouldEnd = true
+					break
+				}
+			}
+		}
+		if shouldEnd {
+			await end(dismissalPolicy: .immediate)
+		}
+	}
+
+	private static var hasActiveMeetup: Bool {
+		!Activity<MeetupActivityAttributes>.activities.isEmpty
+	}
+
+	private static func scheduleAutoEnd(for activity: Activity<MeetupActivityAttributes>) {
+		let meetupID = activity.attributes.meetupID
+		let deadline: Date
+		if let meetAt = activity.attributes.meetAt {
+			deadline = meetAt.addingTimeInterval(meetAtGrace)
+		} else {
+			deadline = Date().addingTimeInterval(maxLifetime)
+		}
+		let delay = max(0, deadline.timeIntervalSinceNow)
+		autoEndTask?.cancel()
+		autoEndTask = Task {
+			try? await Task.sleep(for: .seconds(delay))
+			guard !Task.isCancelled else { return }
+			// Only end if this meetup is still the active one.
+			guard Activity<MeetupActivityAttributes>.activities.contains(where: {
+				$0.attributes.meetupID == meetupID
+			}) else { return }
+			await end(dismissalPolicy: .immediate)
 		}
 	}
 

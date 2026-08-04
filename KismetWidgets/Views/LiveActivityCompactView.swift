@@ -1,4 +1,5 @@
 import ActivityKit
+import AppIntents
 import SwiftUI
 import WidgetKit
 
@@ -84,6 +85,17 @@ struct MeetupActivityCompactView: View {
 			}
 
 			Spacer(minLength: 0)
+
+			Button(intent: EndMeetupLiveActivityIntent()) {
+				Image(systemName: "xmark")
+					.font(.system(size: 11, weight: .bold))
+					.foregroundStyle(.secondary)
+					.frame(width: 28, height: 28)
+					.background(Circle().fill(Color.primary.opacity(0.08)))
+					.contentShape(Circle())
+			}
+			.buttonStyle(.plain)
+			.accessibilityLabel("Dismiss")
 		}
 	}
 

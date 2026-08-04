@@ -41,6 +41,7 @@ struct MeetupLiveActivity: Widget {
 						state: context.state,
 						showsHeader: false,
 						showsCollapseControl: false,
+						showsEndControl: !context.state.isEnded,
 						compact: true
 					)
 					.padding(.horizontal, 4)

@@ -41,3 +41,21 @@ struct CollapseMeetupLiveActivityIntent: LiveActivityIntent {
 		return .result()
 	}
 }
+
+/// Ends the meetup Live Activity. Keep in sync with the app-target intent.
+struct EndMeetupLiveActivityIntent: LiveActivityIntent {
+	static var title: LocalizedStringResource = "End meetup"
+	static var description = IntentDescription("Ends the meetup Live Activity.")
+	static var isDiscoverable: Bool = false
+
+	func perform() async throws -> some IntentResult {
+		let final = ActivityContent(
+			state: MeetupActivityAttributes.ContentState.ended,
+			staleDate: nil
+		)
+		for activity in Activity<MeetupActivityAttributes>.activities {
+			await activity.end(final, dismissalPolicy: .immediate)
+		}
+		return .result()
+	}
+}

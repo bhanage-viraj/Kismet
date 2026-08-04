@@ -69,6 +69,11 @@ struct KismetApp: App {
 				}
 				.onChange(of: scenePhase) { _, newPhase in
 					backgroundProximity.handleScenePhase(newPhase)
+					if newPhase == .active {
+						Task { @MainActor in
+							await MeetupLiveActivityController.endExpiredIfNeeded()
+						}
+					}
 				}
 		}
 	}

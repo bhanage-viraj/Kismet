@@ -27,3 +27,15 @@ struct CollapseMeetupLiveActivityIntent: LiveActivityIntent {
 		return .result()
 	}
 }
+
+/// Ends the meetup Live Activity and dismisses it from Lock Screen / Dynamic Island.
+struct EndMeetupLiveActivityIntent: LiveActivityIntent {
+	static var title: LocalizedStringResource = "End meetup"
+	static var description = IntentDescription("Ends the meetup Live Activity.")
+	static var isDiscoverable: Bool = false
+
+	func perform() async throws -> some IntentResult {
+		await MeetupLiveActivityController.end(dismissalPolicy: .immediate)
+		return .result()
+	}
+}
