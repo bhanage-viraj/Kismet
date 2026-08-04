@@ -388,8 +388,10 @@ The broker is in-memory, so this is single-instance only; scaling out means swap
 Requires Bearer access token. Registers this device for silent wake.
 
 ```json
-{ "deviceToken": "<apns hex token>", "platform": "ios" }
+{ "deviceToken": "<apns hex token>", "platform": "ios", "bundleId": "bhanageviraj.indeKismet" }
 ```
+
+`bundleId` should be `Bundle.main.bundleIdentifier` so the server picks the matching Apple team key / APNs topic (`bhanageviraj.indeKismet` or `sanjivanand.IndeKismet`).
 
 Returns `{ "ok": true }`. Re-registering the same token is idempotent; a token that moves to another account is removed from the previous owner.
 
@@ -418,7 +420,7 @@ See `server/.env.example`:
 | Variable | Notes |
 |----------|--------|
 | `ALLOW_INSECURE_CONFIG` | Permits the development auth settings below. Without it the server refuses to start on them |
-| `APPLE_CLIENT_ID` | Allowed Apple JWT `aud` — iOS bundle ID (`bhanageviraj.indeKismet`) |
+| `APPLE_CLIENT_ID` | Allowed Apple JWT `aud` values — comma-separated iOS bundle IDs (`bhanageviraj.indeKismet,sanjivanand.IndeKismet`) |
 | `APPLE_VERIFY_TOKEN` | `false` only for local Simulator demos; production must be `true` |
 | `JWT_SECRET` | At least 32 characters |
 | `MONGODB_URI` | Default `mongodb://localhost:27017/kismet` |
@@ -428,9 +430,10 @@ See `server/.env.example`:
 | `BLOB_MAX_CIPHERTEXT_BYTES` | Per-blob size cap, default `4096` |
 | `BLOB_MAX_BATCH_SIZE` | Blobs per upload, default `500` |
 | `APNS_ENABLED` | `true` to send silent wakes on LOCATION blobs |
-| `APNS_KEY_ID` / `APNS_TEAM_ID` | From Apple Developer → Keys |
+| `APNS_KEY_ID` / `APNS_TEAM_ID` | Primary Apple Developer key (your team) |
 | `APNS_KEY_PATH` or `APNS_KEY_P8` | Auth Key `.p8` on disk or inline PEM |
-| `APNS_BUNDLE_ID` | Must match iOS `PRODUCT_BUNDLE_IDENTIFIER` |
+| `APNS_BUNDLE_ID` | Primary iOS `PRODUCT_BUNDLE_IDENTIFIER` |
+| `APNS_2_KEY_ID` / `APNS_2_TEAM_ID` / `APNS_2_KEY_P8` / `APNS_2_BUNDLE_ID` | Optional second team (teammate build) |
 | `APNS_PRODUCTION` | `false` = sandbox APNs, `true` = production |
 
 ## Tests

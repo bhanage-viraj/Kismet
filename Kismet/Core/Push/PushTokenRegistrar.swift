@@ -8,6 +8,7 @@ enum PushTokenRegistrar {
 	struct TokenBody: Encodable {
 		var deviceToken: String
 		var platform: String
+		var bundleId: String
 	}
 
 	struct TokenResponse: Decodable {
@@ -27,7 +28,11 @@ enum PushTokenRegistrar {
 		do {
 			let _: TokenResponse = try await APIClient.shared.post(
 				"/push/token",
-				body: TokenBody(deviceToken: hex, platform: "ios")
+				body: TokenBody(
+					deviceToken: hex,
+					platform: "ios",
+					bundleId: Bundle.main.bundleIdentifier ?? ""
+				)
 			)
 		} catch {
 			// Non-fatal — significant-change monitoring still covers proximity without push.
@@ -42,7 +47,11 @@ enum PushTokenRegistrar {
 			let _: TokenResponse = try await APIClient.shared.request(
 				method: "DELETE",
 				path: "/push/token",
-				body: TokenBody(deviceToken: hex, platform: "ios")
+				body: TokenBody(
+					deviceToken: hex,
+					platform: "ios",
+					bundleId: Bundle.main.bundleIdentifier ?? ""
+				)
 			)
 		} catch {
 			// Best effort on sign-out.

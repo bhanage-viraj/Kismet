@@ -28,7 +28,7 @@ public class PushTokenController {
 		if (request == null) {
 			throw new ApiException(HttpStatus.BAD_REQUEST, "Body is required");
 		}
-		pushTokenService.register(authUser.userId(), request.deviceToken(), request.platform());
+		pushTokenService.register(authUser.userId(), request.deviceToken(), request.platform(), request.bundleId());
 		return new PushTokenResponse(true);
 	}
 

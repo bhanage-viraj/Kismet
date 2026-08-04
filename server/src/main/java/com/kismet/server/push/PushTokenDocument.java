@@ -21,6 +21,7 @@ public class PushTokenDocument {
 	private String deviceToken;
 
 	private String platform;
+	private String bundleId;
 	private Instant updatedAt;
 	private Instant createdAt;
 
@@ -54,6 +55,14 @@ public class PushTokenDocument {
 
 	public void setPlatform(String platform) {
 		this.platform = platform;
+	}
+
+	public String getBundleId() {
+		return bundleId;
+	}
+
+	public void setBundleId(String bundleId) {
+		this.bundleId = bundleId;
 	}
 
 	public Instant getUpdatedAt() {

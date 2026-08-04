@@ -24,9 +24,10 @@ public class PushTokenService {
 		this.mongoTemplate = mongoTemplate;
 	}
 
-	public void register(String userId, String deviceToken, String platform) {
+	public void register(String userId, String deviceToken, String platform, String bundleId) {
 		String token = normalizeToken(deviceToken);
 		String normalizedPlatform = normalizePlatform(platform);
+		String normalizedBundle = normalizeBundle(bundleId);
 		Instant now = Instant.now();
 
 		Query query = Query.query(Criteria
@@ -38,6 +39,9 @@ public class PushTokenService {
 				.setOnInsert("createdAt", now)
 				.setOnInsert("userId", userId)
 				.setOnInsert("deviceToken", token);
+		if (normalizedBundle != null) {
+			update.set("bundleId", normalizedBundle);
+		}
 		mongoTemplate.upsert(query, update, PushTokenDocument.class);
 
 		// Same physical device logging into a different account should not keep dual routing.
@@ -79,5 +83,12 @@ public class PushTokenService {
 			return "ios";
 		}
 		return platform.trim().toLowerCase(Locale.ROOT);
+	}
+
+	private static String normalizeBundle(String bundleId) {
+		if (bundleId == null || bundleId.isBlank()) {
+			return null;
+		}
+		return bundleId.trim();
 	}
 }
