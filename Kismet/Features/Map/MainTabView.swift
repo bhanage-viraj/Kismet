@@ -437,6 +437,7 @@ private struct MainTabPreviewHost: View {
 	@State private var meetupMemoryStore = MeetupMemoryStore(
 		container: try! MeetupModelContainer.makeInMemory()
 	)
+	@State private var presenceMode = PresenceModeStore(state: .available)
 
 	var body: some View {
 		MainTabView()
@@ -450,7 +451,8 @@ private struct MainTabPreviewHost: View {
 					locationManager: locationManager,
 					locationSharing: locationSharing,
 					friendsStore: friendsStore,
-					mapFriendsStore: mapFriendsStore
+					mapFriendsStore: mapFriendsStore,
+					presenceMode: presenceMode
 				)
 			)
 			.environment(realtimeClient)
@@ -459,6 +461,7 @@ private struct MainTabPreviewHost: View {
 			.environment(mapWeather)
 			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
+			.environment(presenceMode)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 				await suggestionEngine.refresh(

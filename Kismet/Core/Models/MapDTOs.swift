@@ -129,4 +129,25 @@ struct LocationPayloadDTO: Codable, Sendable {
 	var lon: Double
 	var accuracy: Double?
 	var at: Date
+	/// PresenceState.rawValue when sealed by a modern client. Absent on legacy blobs.
+	var mode: String?
+
+	init(
+		lat: Double,
+		lon: Double,
+		accuracy: Double? = nil,
+		at: Date,
+		mode: String? = nil
+	) {
+		self.lat = lat
+		self.lon = lon
+		self.accuracy = accuracy
+		self.at = at
+		self.mode = mode
+	}
+
+	var presenceState: PresenceState? {
+		guard let mode else { return nil }
+		return PresenceState(rawValue: mode)
+	}
 }

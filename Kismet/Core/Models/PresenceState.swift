@@ -1,12 +1,40 @@
 import Foundation
 import SwiftUI
 
-/// PRD four-state presence. Bridges legacy free/busy/unknown until clients emit this natively.
+/// PRD four-state presence. Sealed into LOCATION blobs as `mode`; schedule FREE/BUSY/UNKNOWN
+/// remains a calendar signal / legacy fallback only.
 enum PresenceState: String, Codable, Hashable, Sendable, CaseIterable {
 	case available
 	case friendsOnly
 	case approximate
 	case eclipse
+
+	var title: String {
+		switch self {
+		case .available: "Available"
+		case .friendsOnly: "Friends Only"
+		case .approximate: "Approximate"
+		case .eclipse: "Eclipse"
+		}
+	}
+
+	var subtitle: String {
+		switch self {
+		case .available: "Open to hang"
+		case .friendsOnly: "Friends can see you"
+		case .approximate: "Rough location only"
+		case .eclipse: "Hidden from everyone"
+		}
+	}
+
+	var systemImage: String {
+		switch self {
+		case .available: "checkmark.circle.fill"
+		case .friendsOnly: "person.2.fill"
+		case .approximate: "location.circle.fill"
+		case .eclipse: "moon.fill"
+		}
+	}
 
 	/// Shown on map / suggestion surfaces (Eclipse is hidden entirely).
 	var isSurfaceVisible: Bool {
@@ -30,10 +58,10 @@ enum PresenceState: String, Codable, Hashable, Sendable, CaseIterable {
 
 	var statusColor: Color {
 		switch self {
-		case .available: KismetTheme.Status.free
-		case .friendsOnly: KismetTheme.Status.busy
-		case .approximate: KismetTheme.Status.unknown
-		case .eclipse: KismetTheme.Status.away
+		case .available: KismetTheme.Bump.available
+		case .friendsOnly: KismetTheme.Bump.friendsOnly
+		case .approximate: KismetTheme.Bump.approximate
+		case .eclipse: KismetTheme.Bump.eclipse
 		}
 	}
 
@@ -55,6 +83,14 @@ enum PresenceState: String, Codable, Hashable, Sendable, CaseIterable {
 
 	static func from(availabilityStatus: AvailabilityStatusDTO) -> PresenceState {
 		from(mapAvailability: availabilityStatus.mapAvailability)
+	}
+
+	/// Prefer sealed `mode`; fall back to schedule FREE/BUSY/UNKNOWN for legacy blobs.
+	static func from(
+		payload: LocationPayloadDTO,
+		availabilityStatus: AvailabilityStatusDTO
+	) -> PresenceState {
+		payload.presenceState ?? from(availabilityStatus: availabilityStatus)
 	}
 }
 

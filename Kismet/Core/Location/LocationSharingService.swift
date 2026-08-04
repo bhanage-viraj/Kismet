@@ -10,6 +10,7 @@ final class LocationSharingService {
 	private(set) var lastUploadAt: Date?
 	private(set) var lastAcceptedCount = 0
 	private(set) var lastErrorMessage: String?
+	private(set) var lastPublishedPresence: PresenceState?
 
 	private let client: APIClient
 	private let crypto: CryptoBox
@@ -42,11 +43,13 @@ final class LocationSharingService {
 	}
 
 	/// Encrypts the current fix for each friend with a public key and uploads a LOCATION batch.
-	/// Skips fallback/demo coordinates — only real `CLLocation` fixes are shared.
+	/// Presence shapes precision (Approximate/Eclipse are quantized) and is sealed as `mode`.
+	/// Eclipse still publishes a blob so friends can hide the pin immediately.
 	func shareIfNeeded(
 		location: CLLocation?,
 		senderUserId: String?,
 		friends: [FriendSummaryDTO],
+		presence: PresenceState,
 		force: Bool = false
 	) {
 		guard isSharingActive || force else { return }
@@ -58,6 +61,7 @@ final class LocationSharingService {
 				location: location,
 				senderUserId: senderUserId,
 				friends: friends,
+				presence: presence,
 				force: force
 			)
 		}
@@ -67,11 +71,13 @@ final class LocationSharingService {
 		location: CLLocation,
 		senderUserId: String,
 		friends: [FriendSummaryDTO],
+		presence: PresenceState,
 		force: Bool
 	) async {
 		guard !Task.isCancelled else { return }
 
-		if !force, let lastUploadedLocation {
+		let presenceChanged = lastPublishedPresence != presence
+		if !force, !presenceChanged, let lastUploadedLocation {
 			let moved = location.distance(from: lastUploadedLocation)
 			let elapsed = lastUploadAt.map { Date().timeIntervalSince($0) } ?? .infinity
 			if moved < minUploadDistance, elapsed < minUploadInterval {
@@ -89,12 +95,7 @@ final class LocationSharingService {
 		lastErrorMessage = nil
 		defer { isUploading = false }
 
-		let payload = LocationPayloadDTO(
-			lat: location.coordinate.latitude,
-			lon: location.coordinate.longitude,
-			accuracy: location.horizontalAccuracy >= 0 ? location.horizontalAccuracy : nil,
-			at: location.timestamp
-		)
+		let payload = PresenceLocationPolicy.payload(from: location, presence: presence)
 
 		var blobs: [CreateBlobRequestDTO] = []
 		blobs.reserveCapacity(recipients.count)
@@ -133,6 +134,7 @@ final class LocationSharingService {
 			lastUploadedLocation = location
 			lastUploadAt = Date()
 			lastAcceptedCount = response.accepted
+			lastPublishedPresence = presence
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}

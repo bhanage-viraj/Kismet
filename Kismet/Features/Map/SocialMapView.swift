@@ -4,6 +4,7 @@ import SwiftUI
 struct SocialMapView: View {
 	@Environment(VisitLocationManager.self) private var locationManager
 	@Environment(MapFriendsStore.self) private var friendsStore
+	@Environment(PresenceModeStore.self) private var presenceMode
 
 	@Binding var cameraPosition: MapCameraPosition
 	var showsRadarRings: Bool = true
@@ -72,25 +73,11 @@ struct SocialMapView: View {
 		if locationManager.isAuthorized, locationManager.hasFix {
 			UserAnnotation()
 			Annotation("You", coordinate: center, anchor: .top) {
-				YouPinLabel()
+				YouPresenceMarker(presence: presenceMode.state, showsDot: false)
 			}
 		} else {
 			Annotation("You", coordinate: center, anchor: .bottom) {
-				VStack(spacing: 4) {
-					ZStack {
-						Circle()
-							.fill(KismetTheme.Map.userPulse.opacity(0.18))
-							.frame(width: 44, height: 44)
-						Circle()
-							.fill(KismetTheme.Map.userPulse)
-							.frame(width: 14, height: 14)
-							.overlay {
-								Circle()
-									.stroke(.white, lineWidth: 2)
-							}
-					}
-					YouPinLabel()
-				}
+				YouPresenceMarker(presence: presenceMode.state, showsDot: true)
 			}
 		}
 	}
@@ -103,14 +90,14 @@ private struct FriendMapAnnotationView: View {
 	let isSelected: Bool
 
 	private var ringColor: Color {
-		KismetTheme.Map.ring(for: person.availability)
+		person.presenceState.statusColor
 	}
 
 	var body: some View {
 		VStack(spacing: 6) {
 			ZStack {
 				Circle()
-					.fill(KismetTheme.Map.glow(for: person.availability))
+					.fill(ringColor.opacity(0.35))
 					.frame(width: 78, height: 78)
 					.blur(radius: 8)
 
@@ -133,7 +120,7 @@ private struct FriendMapAnnotationView: View {
 					.clipShape(Circle())
 
 				Circle()
-					.fill(person.availability.statusColor)
+					.fill(person.presenceState.statusColor)
 					.frame(
 						width: KismetTheme.Chrome.statusDotSize,
 						height: KismetTheme.Chrome.statusDotSize
@@ -155,22 +142,131 @@ private struct FriendMapAnnotationView: View {
 				.shadow(color: .black.opacity(0.12), radius: 6, y: 2)
 		}
 		.accessibilityElement(children: .combine)
-		.accessibilityLabel("\(person.displayName), \(person.formattedDistance), \(person.availability.rawValue)")
+		.accessibilityLabel("\(person.displayName), \(person.formattedDistance), \(person.presenceState.title)")
 	}
 }
 
-private struct YouPinLabel: View {
+/// You-pin: presence-tinted label + a short ripple when the mode changes.
+private struct YouPresenceMarker: View {
+	let presence: PresenceState
+	/// When there's no system `UserAnnotation`, draw our own location dot.
+	var showsDot: Bool = false
+
+	@Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+	@State private var ripple = false
+	@State private var pop = false
+	@State private var showTitle = false
+
+	private var labelText: String {
+		showTitle ? presence.title : "You"
+	}
+
 	var body: some View {
+		VStack(spacing: 5) {
+			if showsDot {
+				ZStack {
+					presenceRipple
+
+					Circle()
+						.fill(presence.statusColor.opacity(0.22))
+						.frame(width: 40, height: 40)
+
+					Circle()
+						.fill(presence.statusColor)
+						.frame(width: 14, height: 14)
+						.overlay {
+							Circle().stroke(.white, lineWidth: 2)
+						}
+						.scaleEffect(pop ? 1.28 : 1)
+				}
+			}
+
+			labelCapsule
+				.overlay(alignment: .top) {
+					if !showsDot {
+						presenceRipple
+							.offset(y: -14)
+							.allowsHitTesting(false)
+					}
+				}
+		}
+		.fixedSize()
+		.accessibilityLabel("You, \(presence.title)")
+		.onChange(of: presence) { _, _ in
+			playPresenceChange()
+		}
+	}
+
+	private var labelCapsule: some View {
 		HStack(spacing: 4) {
-			Image(systemName: "mappin.circle.fill")
-				.foregroundStyle(KismetTheme.Map.youPin)
-			Text("You")
+			Image(systemName: presence.systemImage)
 				.font(.caption2.weight(.bold))
+				.foregroundStyle(presence.statusColor)
+				.symbolEffect(.bounce, value: presence)
+
+			Text(labelText)
+				.font(.caption2.weight(.bold))
+				.foregroundStyle(.primary)
+				.lineLimit(1)
+				.id(labelText)
 		}
 		.padding(.horizontal, 8)
 		.padding(.vertical, 4)
 		.background(KismetTheme.Map.annotationLabelFill, in: Capsule())
-		.shadow(color: .black.opacity(0.12), radius: 4, y: 1)
+		.overlay {
+			Capsule()
+				.stroke(presence.statusColor.opacity(showTitle || pop ? 0.55 : 0.2), lineWidth: 1)
+		}
+		.shadow(color: presence.statusColor.opacity(pop ? 0.35 : 0.12), radius: pop ? 8 : 4, y: 1)
+		.scaleEffect(pop ? 1.08 : 1)
+		.fixedSize()
+	}
+
+	private var presenceRipple: some View {
+		Circle()
+			.stroke(presence.statusColor.opacity(0.55), lineWidth: 2)
+			.frame(width: 22, height: 22)
+			.scaleEffect(ripple ? 3.2 : 0.4)
+			.opacity(ripple ? 0 : 0.85)
+	}
+
+	private func playPresenceChange() {
+		if reduceMotion {
+			withAnimation(.easeInOut(duration: 0.2)) {
+				showTitle = true
+			}
+			Task {
+				try? await Task.sleep(for: .seconds(1.2))
+				withAnimation(.easeInOut(duration: 0.2)) {
+					showTitle = false
+				}
+			}
+			return
+		}
+
+		ripple = false
+		pop = false
+
+		withAnimation(.spring(response: 0.34, dampingFraction: 0.78)) {
+			showTitle = true
+			pop = true
+		}
+		withAnimation(.easeOut(duration: 0.65)) {
+			ripple = true
+		}
+
+		Task {
+			try? await Task.sleep(for: .milliseconds(380))
+			withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+				pop = false
+			}
+			try? await Task.sleep(for: .milliseconds(900))
+			withAnimation(.spring(response: 0.34, dampingFraction: 0.84)) {
+				showTitle = false
+			}
+			ripple = false
+		}
 	}
 }
 
@@ -190,6 +286,7 @@ private struct YouPinLabel: View {
 private struct SocialMapPreviewHost: View {
 	@State private var locationManager = VisitLocationManager()
 	@State private var friendsStore = MapFriendsStore()
+	@State private var presenceMode = PresenceModeStore(state: .available)
 	@State private var cameraPosition: MapCameraPosition = .region(
 		MKCoordinateRegion(
 			center: MockFriendsProvider.fallbackCoordinate,
@@ -202,6 +299,7 @@ private struct SocialMapPreviewHost: View {
 		SocialMapView(cameraPosition: $cameraPosition)
 			.environment(locationManager)
 			.environment(friendsStore)
+			.environment(presenceMode)
 			.onAppear {
 				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 			}
