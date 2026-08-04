@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 @Observable
 @MainActor
@@ -71,6 +72,7 @@ final class PulseInboxStore {
 
 			pulses = decoded
 			lastRefreshedAt = Date()
+			Self.persistOpenPulse(decoded.first)
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
@@ -83,6 +85,7 @@ final class PulseInboxStore {
 				body: BlobAckRequestDTO(blobIds: [pulse.blobId])
 			)
 			pulses.removeAll { $0.blobId == pulse.blobId }
+			Self.persistOpenPulse(activePulses.first)
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
@@ -93,5 +96,27 @@ final class PulseInboxStore {
 		lastErrorMessage = nil
 		lastRefreshedAt = nil
 		isLoading = false
+		Self.persistOpenPulse(nil)
+	}
+
+	private static func persistOpenPulse(_ pulse: IncomingPulse?) {
+		guard let pulse else {
+			AppGroup.saveOpenPulse(nil)
+			WidgetKit.WidgetCenter.shared.reloadAllTimelines()
+			return
+		}
+		AppGroup.saveOpenPulse(
+			AppGroup.OpenPulse(
+				blobId: pulse.blobId,
+				senderUserId: pulse.senderUserId,
+				senderDisplayName: pulse.senderDisplayName,
+				emoji: pulse.payload.emoji,
+				label: pulse.payload.label,
+				venueName: pulse.payload.venueName,
+				expiresAt: pulse.payload.expiresAt,
+				pulseId: pulse.payload.pulseId
+			)
+		)
+		WidgetKit.WidgetCenter.shared.reloadAllTimelines()
 	}
 }

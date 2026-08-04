@@ -310,6 +310,7 @@ struct MapHomeView: View {
 		await pairedFriends.refresh()
 		await friendsStore.refresh(around: locationManager.displayCoordinate)
 		await pulseInbox.refresh(friends: pairedFriends.friends)
+		await processPendingWidgetPulseAccept()
 
 		try? await Task.sleep(for: .milliseconds(50))
 		guard !Task.isCancelled else { return }
@@ -318,6 +319,16 @@ struct MapHomeView: View {
 		await mapWeather.refreshIfNeeded(at: locationManager.displayCoordinate)
 		publishLocation(force: true)
 		await refreshSuggestions()
+	}
+
+	@MainActor
+	private func processPendingWidgetPulseAccept() async {
+		guard let blobId = AppGroup.pendingAcceptPulseBlobId else { return }
+		AppGroup.pendingAcceptPulseBlobId = nil
+		guard let pulse = pulseInbox.activePulses.first(where: { $0.blobId == blobId })
+			?? pulseInbox.pulses.first(where: { $0.blobId == blobId })
+		else { return }
+		await acceptIncomingPulse(pulse)
 	}
 
 	private func refreshMapData() async {

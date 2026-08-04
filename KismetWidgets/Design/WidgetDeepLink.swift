@@ -11,6 +11,10 @@ enum WidgetDeepLink {
 		URL(string: "\(scheme)://meetup")!
 	}
 
+	static var pulseAccept: URL {
+		URL(string: "\(scheme)://pulse/accept")!
+	}
+
 	static var home: URL {
 		URL(string: "\(scheme)://home")!
 	}
