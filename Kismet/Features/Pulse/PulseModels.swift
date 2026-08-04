@@ -14,3 +14,16 @@ struct OutgoingPulse: Identifiable, Sendable {
 	var recipientUserIds: [String]
 	var payload: PulsePayloadDTO
 }
+
+struct IncomingPulse: Identifiable, Sendable, Equatable {
+	var id: String { blobId }
+	var blobId: String
+	var senderUserId: String
+	var senderDisplayName: String
+	var payload: PulsePayloadDTO
+	var receivedAt: Date
+
+	var isExpired: Bool {
+		payload.expiresAt <= Date()
+	}
+}
