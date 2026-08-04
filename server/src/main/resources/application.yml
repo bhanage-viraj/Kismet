@@ -26,7 +26,7 @@ kismet:
     refresh-ttl-seconds: ${JWT_REFRESH_TTL:2592000}
   apple:
     # Comma-separated list of allowed Apple JWT audiences (iOS bundle IDs).
-    client-id: "${APPLE_CLIENT_ID:bhanageviraj.indeKismet,sanjivanand.IndeKismet}"
+    client-id: "${APPLE_CLIENT_ID:bhanageviraj.indeKismet}"
     verify-token: ${APPLE_VERIFY_TOKEN:false}
   cors:
     origins: ${CORS_ORIGINS:*}
@@ -45,5 +45,5 @@ kismet:
     # Prefer key-path on disk; key-p8 can hold the PEM inline for hosted demos.
     key-path: ${APNS_KEY_PATH:}
     key-p8: ${APNS_KEY_P8:}
-    bundle-id: ${APNS_BUNDLE_ID:sanjivanand.IndeKismet}
+    bundle-id: ${APNS_BUNDLE_ID:bhanageviraj.indeKismet}
     production: ${APNS_PRODUCTION:false}

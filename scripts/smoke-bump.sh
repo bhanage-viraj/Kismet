@@ -10,7 +10,7 @@ b64url() { printf '%s' "$1" | base64 | tr '+/' '-_' | tr -d '='; }
 fake_apple_token() {
   local sub="$1"
   local header payload
-  local aud="${APPLE_AUD:-sanjivanand.IndeKismet}"
+  local aud="${APPLE_AUD:-bhanageviraj.indeKismet}"
   header=$(b64url '{"alg":"none","typ":"JWT"}')
   # aud must be listed in APPLE_CLIENT_ID (override with APPLE_AUD=…).
   payload=$(b64url "{\"sub\":\"$sub\",\"aud\":\"$aud\",\"email\":\"$sub@example.com\",\"exp\":4102444800}")

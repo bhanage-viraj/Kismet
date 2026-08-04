@@ -17,3 +17,6 @@ server/.mvn/wrapper/maven-wrapper.jar
 # Secrets
 **/*.p12
 **/*.mobileprovision
+**/*.p8
+server/.apns_key_p8.envvalue
+server/.apns_render_payload.json

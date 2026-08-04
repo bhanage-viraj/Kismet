@@ -15,8 +15,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 /**
  * Sends content-available silent pushes so a recipient can wake, fetch LOCATION blobs,
  * and compute proximity on-device. No-ops when APNs credentials are absent.
@@ -29,7 +27,6 @@ public class PushWakeService {
 
 	private final PushTokenService pushTokenService;
 	private final ApnsAuthTokenProvider authTokenProvider;
-	private final ObjectMapper objectMapper;
 	private final HttpClient httpClient;
 	private final ExecutorService executor;
 	private final String bundleId;
@@ -39,12 +36,10 @@ public class PushWakeService {
 	public PushWakeService(
 			PushTokenService pushTokenService,
 			ApnsAuthTokenProvider authTokenProvider,
-			ObjectMapper objectMapper,
 			@Value("${kismet.apns.bundle-id:}") String bundleId,
 			@Value("${kismet.apns.production:false}") boolean production) {
 		this.pushTokenService = pushTokenService;
 		this.authTokenProvider = authTokenProvider;
-		this.objectMapper = objectMapper;
 		this.bundleId = bundleId == null ? "" : bundleId.trim();
 		this.host = production
 				? "https://api.push.apple.com"
@@ -96,11 +91,9 @@ public class PushWakeService {
 	}
 
 	private void sendSilent(String deviceToken, String senderUserId) throws Exception {
-		String body = objectMapper.writeValueAsString(Map.of(
-				"aps", Map.of("content-available", 1),
-				"type", "blob.available",
-				"kind", "LOCATION",
-				"senderUserId", senderUserId));
+		// Fixed silent-push envelope — avoid Jackson compile dep (Boot 4 modular classpath).
+		String body = "{\"aps\":{\"content-available\":1},\"type\":\"blob.available\","
+				+ "\"kind\":\"LOCATION\",\"senderUserId\":\"" + jsonEscape(senderUserId) + "\"}";
 
 		HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(host + "/3/device/" + deviceToken))
@@ -126,5 +119,17 @@ public class PushWakeService {
 			return;
 		}
 		log.warn("APNs silent push status={} body={}", status, response.body());
+	}
+
+	private static String jsonEscape(String value) {
+		if (value == null) {
+			return "";
+		}
+		return value
+				.replace("\\", "\\\\")
+				.replace("\"", "\\\"")
+				.replace("\n", "\\n")
+				.replace("\r", "\\r")
+				.replace("\t", "\\t");
 	}
 }
