@@ -68,6 +68,7 @@ struct MoreView: View {
 	let friendsStore = FriendsStore()
 	let mapFriendsStore = MapFriendsStore()
 	let locationSharing = LocationSharingService()
+	let presenceMode = PresenceModeStore(state: .available)
 	return MoreView()
 		.environment(AuthSession())
 		.environment(friendsStore)
@@ -78,8 +79,10 @@ struct MoreView: View {
 				locationManager: locationManager,
 				locationSharing: locationSharing,
 				friendsStore: friendsStore,
-				mapFriendsStore: mapFriendsStore
+				mapFriendsStore: mapFriendsStore,
+				presenceMode: presenceMode
 			)
 		)
 		.environment(RealtimeClient())
+		.environment(presenceMode)
 }

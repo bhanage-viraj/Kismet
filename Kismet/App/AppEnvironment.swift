@@ -17,6 +17,7 @@ final class AppEnvironment {
 	let weatherObstacles: WeatherObstacleStore
 	let meetupModelContainer: ModelContainer
 	let meetupMemoryStore: MeetupMemoryStore
+	let presenceMode: PresenceModeStore
 
 	init(
 		authSession: AuthSession? = nil,
@@ -30,7 +31,8 @@ final class AppEnvironment {
 		pulsePublisher: PulsePublisher? = nil,
 		mapWeather: MapWeatherController? = nil,
 		weatherObstacles: WeatherObstacleStore? = nil,
-		meetupModelContainer: ModelContainer? = nil
+		meetupModelContainer: ModelContainer? = nil,
+		presenceMode: PresenceModeStore? = nil
 	) {
 		self.apiClient = apiClient
 		self.authSession = authSession ?? AuthSession(client: apiClient)
@@ -38,15 +40,18 @@ final class AppEnvironment {
 		let resolvedMapFriendsStore = mapFriendsStore ?? MapFriendsStore(client: apiClient)
 		let resolvedFriendsStore = friendsStore ?? FriendsStore(client: apiClient)
 		let resolvedLocationSharing = locationSharing ?? LocationSharingService(client: apiClient)
+		let resolvedPresenceMode = presenceMode ?? PresenceModeStore()
 		self.locationManager = resolvedLocationManager
 		self.mapFriendsStore = resolvedMapFriendsStore
 		self.friendsStore = resolvedFriendsStore
 		self.locationSharing = resolvedLocationSharing
+		self.presenceMode = resolvedPresenceMode
 		self.backgroundProximity = BackgroundProximityController(
 			locationManager: resolvedLocationManager,
 			locationSharing: resolvedLocationSharing,
 			friendsStore: resolvedFriendsStore,
-			mapFriendsStore: resolvedMapFriendsStore
+			mapFriendsStore: resolvedMapFriendsStore,
+			presenceMode: resolvedPresenceMode
 		)
 		self.realtimeClient = realtimeClient ?? RealtimeClient()
 		self.suggestionEngine = suggestionEngine ?? SuggestionEngine()

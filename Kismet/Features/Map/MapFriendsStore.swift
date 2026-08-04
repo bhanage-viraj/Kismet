@@ -123,14 +123,20 @@ final class MapFriendsStore {
 		payload: LocationPayloadDTO,
 		blobUpdatedAt: Date,
 		origin: CLLocation
-	) -> MapPerson {
+	) -> MapPerson? {
+		let presence = PresenceState.from(
+			payload: payload,
+			availabilityStatus: friend.availability.status
+		)
+		// Eclipse: hidden from map / suggestions / proximity surfaces.
+		guard presence.isSurfaceVisible else { return nil }
+
 		let coordinate = CLLocationCoordinate2D(latitude: payload.lat, longitude: payload.lon)
 		let distance = origin.distance(
 			from: CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
 		)
-		let availability = friend.availability.status.mapAvailability
-		let presence = PresenceState.from(availabilityStatus: friend.availability.status)
-		let walking = formattedWalkingMinutes(distanceMeters: distance)
+		let availability = presence.mapAvailability
+		let walking = formattedWalkingMinutes(distanceMeters: distance, presence: presence)
 		let interestsList = Array(friend.sharedInterests.prefix(4))
 		let interests = interestsList.prefix(2).joined(separator: ", ")
 
@@ -143,87 +149,106 @@ final class MapFriendsStore {
 			distanceMeters: distance,
 			sharedInterests: interestsList,
 			insightSummary: insightSummary(
+				presence: presence,
 				availability: friend.availability,
 				walking: walking,
 				blobUpdatedAt: blobUpdatedAt
 			),
-			intentLabel: intentLabel(availability: availability, interests: interests),
-			neighborhoodLabel: neighborhoodLabel(blobUpdatedAt: blobUpdatedAt, accuracy: payload.accuracy),
+			intentLabel: intentLabel(presence: presence, interests: interests),
+			neighborhoodLabel: neighborhoodLabel(
+				presence: presence,
+				blobUpdatedAt: blobUpdatedAt,
+				accuracy: payload.accuracy
+			),
 			mutualFriendCount: 0,
 			accentSystemImage: "person.crop.circle.fill",
-			ctaTitle: ctaTitle(for: availability),
-			ctaSystemImage: ctaSystemImage(for: availability)
+			ctaTitle: ctaTitle(for: presence),
+			ctaSystemImage: ctaSystemImage(for: presence)
 		)
 	}
 
 	private static func insightSummary(
+		presence: PresenceState,
 		availability: AvailabilitySnapshotDTO,
 		walking: String,
 		blobUpdatedAt: Date
 	) -> String {
 		let seen = RelativeDateTimeFormatter.named.localizedString(for: blobUpdatedAt, relativeTo: Date())
-		switch availability.status {
-		case .free:
+		switch presence {
+		case .available:
 			if let until = availability.freeUntil {
 				let time = until.formatted(date: .omitted, time: .shortened)
-				return "Free until \(time).\n\(walking). Last seen \(seen)."
+				return "Available until \(time).\n\(walking). Last seen \(seen)."
 			}
-			return "Free right now.\n\(walking). Last seen \(seen)."
-		case .busy:
-			if let freeFrom = availability.freeFrom {
-				let when = RelativeDateTimeFormatter.named.localizedString(for: freeFrom, relativeTo: Date())
-				return "Busy — free \(when).\n\(walking). Last seen \(seen)."
-			}
-			return "Busy right now.\n\(walking). Last seen \(seen)."
-		case .unknown:
-			return "Nearby — status unclear.\n\(walking). Last seen \(seen)."
+			return "Available right now.\n\(walking). Last seen \(seen)."
+		case .friendsOnly:
+			return "Friends only.\n\(walking). Last seen \(seen)."
+		case .approximate:
+			return "Approximate location.\nNearby. Last seen \(seen)."
+		case .eclipse:
+			return "Hidden.\nLast seen \(seen)."
 		}
 	}
 
-	private static func intentLabel(availability: MapAvailability, interests: String) -> String {
+	private static func intentLabel(presence: PresenceState, interests: String) -> String {
 		let interestSuffix = interests.isEmpty ? nil : interests
-		switch availability {
-		case .free:
+		switch presence {
+		case .available:
 			if let interestSuffix {
-				return "Free to hang • \(interestSuffix)"
+				return "Available • \(interestSuffix)"
 			}
-			return "Free to hang"
-		case .busy:
+			return "Available to hang"
+		case .friendsOnly:
 			if let interestSuffix {
-				return "Busy • \(interestSuffix)"
+				return "Friends only • \(interestSuffix)"
 			}
-			return "Busy • Back later"
-		case .unknown:
+			return "Friends only"
+		case .approximate:
 			if let interestSuffix {
 				return "Nearby • \(interestSuffix)"
 			}
 			return "Nearby • Open to plans"
+		case .eclipse:
+			return "Hidden"
 		}
 	}
 
-	private static func neighborhoodLabel(blobUpdatedAt: Date, accuracy: Double?) -> String {
+	private static func neighborhoodLabel(
+		presence: PresenceState,
+		blobUpdatedAt: Date,
+		accuracy: Double?
+	) -> String {
 		let seen = RelativeDateTimeFormatter.named.localizedString(for: blobUpdatedAt, relativeTo: Date())
+		if !presence.showsPreciseLocation {
+			return "Approximate location · updated \(seen)"
+		}
 		if let accuracy, accuracy > 0, accuracy < 5_000 {
 			return "Live location · \(Int(accuracy.rounded()))m accuracy · \(seen)"
 		}
 		return "Live location · updated \(seen)"
 	}
 
-	private static func ctaTitle(for availability: MapAvailability) -> String {
-		switch availability {
-		case .free, .unknown: "Say hi nearby"
-		case .busy: "Ping when free"
+	private static func ctaTitle(for presence: PresenceState) -> String {
+		switch presence {
+		case .available, .approximate: "Say hi nearby"
+		case .friendsOnly: "Ping a friend"
+		case .eclipse: "Hidden"
 		}
 	}
 
-	private static func ctaSystemImage(for availability: MapAvailability) -> String {
-		switch availability {
-		case .free, .unknown: "hand.wave.fill"
-		case .busy: "hourglass"
+	private static func ctaSystemImage(for presence: PresenceState) -> String {
+		switch presence {
+		case .available, .approximate: "hand.wave.fill"
+		case .friendsOnly: "person.2.fill"
+		case .eclipse: "moon.fill"
 		}
 	}
 
-	private static func formattedWalkingMinutes(distanceMeters: CLLocationDistance) -> String {
+	private static func formattedWalkingMinutes(
+		distanceMeters: CLLocationDistance,
+		presence: PresenceState
+	) -> String {
+		guard presence.showsPreciseLocation else { return "Nearby" }
 		let minutes = max(1, Int((distanceMeters / 80).rounded()))
 		if distanceMeters < 1000 {
 			return "\(Int(distanceMeters.rounded()))m · \(minutes) mins away"

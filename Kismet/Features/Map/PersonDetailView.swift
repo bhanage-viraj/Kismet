@@ -51,9 +51,9 @@ struct PersonDetailView: View {
 						.foregroundStyle(.primary)
 
 					Circle()
-						.fill(person.availability.statusColor)
+						.fill(person.presenceState.statusColor)
 						.frame(width: 10, height: 10)
-						.accessibilityLabel(person.availability.rawValue)
+						.accessibilityLabel(person.presenceState.title)
 				}
 
 				Text(person.neighborhoodLabel)
@@ -87,7 +87,7 @@ struct PersonDetailView: View {
 	private var avatarBadge: some View {
 		ZStack {
 			Circle()
-				.fill(KismetTheme.Map.ring(for: person.availability).gradient)
+				.fill(person.presenceState.statusColor.gradient)
 				.frame(
 					width: KismetTheme.Chrome.detailAvatarSize + 8,
 					height: KismetTheme.Chrome.detailAvatarSize + 8
@@ -105,8 +105,8 @@ struct PersonDetailView: View {
 				.background(
 					LinearGradient(
 						colors: [
-							KismetTheme.Map.ring(for: person.availability).opacity(0.85),
-							KismetTheme.Map.ring(for: person.availability).opacity(0.55),
+							person.presenceState.statusColor.opacity(0.85),
+							person.presenceState.statusColor.opacity(0.55),
 						],
 						startPoint: .topLeading,
 						endPoint: .bottomTrailing

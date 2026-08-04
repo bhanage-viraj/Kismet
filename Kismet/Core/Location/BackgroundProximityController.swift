@@ -20,6 +20,7 @@ final class BackgroundProximityController {
 	private let locationSharing: LocationSharingService
 	private let friendsStore: FriendsStore
 	private let mapFriendsStore: MapFriendsStore
+	private let presenceMode: PresenceModeStore
 
 	private var handleTask: Task<Void, Never>?
 	private var lastHandledLocation: CLLocation?
@@ -30,12 +31,14 @@ final class BackgroundProximityController {
 		locationManager: VisitLocationManager,
 		locationSharing: LocationSharingService,
 		friendsStore: FriendsStore,
-		mapFriendsStore: MapFriendsStore
+		mapFriendsStore: MapFriendsStore,
+		presenceMode: PresenceModeStore
 	) {
 		self.locationManager = locationManager
 		self.locationSharing = locationSharing
 		self.friendsStore = friendsStore
 		self.mapFriendsStore = mapFriendsStore
+		self.presenceMode = presenceMode
 	}
 
 	func start() {
@@ -141,6 +144,7 @@ final class BackgroundProximityController {
 			location: location,
 			senderUserId: senderUserId,
 			friends: friendsStore.friends,
+			presence: presenceMode.state,
 			force: force
 		)
 
@@ -160,11 +164,12 @@ final class BackgroundProximityController {
 
 		var notified = false
 		for friend in mapFriendsStore.friends where friend.distanceMeters <= proximityRadiusMeters {
-			guard friend.presenceState != .eclipse else { continue }
+			guard friend.presenceState.isSurfaceVisible else { continue }
 			NearbyFriendNotifier.notifyIfAllowed(
 				friendID: friend.id,
 				displayName: friend.displayName,
-				distanceMeters: friend.distanceMeters
+				distanceMeters: friend.distanceMeters,
+				showsPreciseDistance: friend.presenceState.showsPreciseLocation
 			)
 			notified = true
 		}

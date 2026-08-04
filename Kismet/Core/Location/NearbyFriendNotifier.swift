@@ -14,13 +14,22 @@ enum NearbyFriendNotifier {
 		}
 	}
 
-	static func notifyIfAllowed(friendID: String, displayName: String, distanceMeters: CLLocationDistance) {
+	static func notifyIfAllowed(
+		friendID: String,
+		displayName: String,
+		distanceMeters: CLLocationDistance,
+		showsPreciseDistance: Bool = true
+	) {
 		guard shouldNotify(friendID: friendID) else { return }
 		requestAuthorizationIfNeeded()
 
 		let content = UNMutableNotificationContent()
 		content.title = "Friend nearby"
-		content.body = "\(displayName) is about \(Self.formattedDistance(distanceMeters)) away."
+		if showsPreciseDistance {
+			content.body = "\(displayName) is about \(Self.formattedDistance(distanceMeters)) away."
+		} else {
+			content.body = "\(displayName) is nearby."
+		}
 		content.sound = .default
 		content.userInfo = ["friendUserId": friendID]
 

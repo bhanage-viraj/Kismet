@@ -13,6 +13,7 @@ struct MapHomeView: View {
 	@Environment(SuggestionEngine.self) private var suggestionEngine
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
 	@Environment(MapWeatherController.self) private var mapWeather
+	@Environment(PresenceModeStore.self) private var presenceMode
 
 	@State private var cameraPosition: MapCameraPosition = .region(
 		MKCoordinateRegion(
@@ -23,6 +24,7 @@ struct MapHomeView: View {
 	)
 	@State private var ctaToast: String?
 	@State private var didCenterOnUser = false
+	@State private var isPresencePickerExpanded = false
 
 	private var displayName: String {
 		authSession.preferredDisplayName
@@ -37,6 +39,8 @@ struct MapHomeView: View {
 	}
 
 	var body: some View {
+		@Bindable var presenceMode = presenceMode
+
 		ZStack(alignment: .top) {
 			SocialMapView(cameraPosition: $cameraPosition)
 				.ignoresSafeArea()
@@ -57,6 +61,7 @@ struct MapHomeView: View {
 			.opacity(showsFloatingMapChrome ? 1 : 0)
 			.allowsHitTesting(showsFloatingMapChrome)
 			.animation(.easeInOut(duration: 0.2), value: showsFloatingMapChrome)
+			.zIndex(1)
 
 			if let selected = friendsStore.selectedFriend {
 				Color.black.opacity(colorScheme == .dark ? 0.35 : 0.18)
@@ -113,6 +118,15 @@ struct MapHomeView: View {
 			publishLocation(force: true)
 			Task { await friendsStore.refresh(around: locationManager.displayCoordinate) }
 		}
+		.onChange(of: friendsStore.selectedFriendID) { _, selectedID in
+			if selectedID != nil {
+				withAnimation(.snappy) { isPresencePickerExpanded = false }
+			}
+		}
+		.onChange(of: presenceMode.state) { _, _ in
+			withAnimation(.snappy) { isPresencePickerExpanded = false }
+			publishLocation(force: true)
+		}
 		.overlay(alignment: .top) {
 			if let ctaToast {
 				Text(ctaToast)
@@ -142,11 +156,12 @@ struct MapHomeView: View {
 						)
 
 					Circle()
-						.fill(KismetTheme.Status.free)
+						.fill(presenceMode.state.statusColor)
 						.frame(width: 11, height: 11)
 						.overlay {
 							Circle().stroke(.background, lineWidth: 2)
 						}
+						.accessibilityLabel(presenceMode.state.title)
 				}
 
 				VStack(alignment: .leading, spacing: 2) {
@@ -155,35 +170,31 @@ struct MapHomeView: View {
 						.foregroundStyle(KismetTheme.Map.headerForeground)
 						.lineLimit(1)
 
-					HStack(spacing: 4) {
-						Text(locationSubtitle)
-							.font(.caption)
-							.foregroundStyle(KismetTheme.Map.secondaryLabel)
-							.lineLimit(1)
-						Image(systemName: "chevron.down")
-							.font(.caption2.weight(.semibold))
-							.foregroundStyle(KismetTheme.Map.secondaryLabel)
-					}
+					Text(locationSubtitle)
+						.font(.caption)
+						.foregroundStyle(KismetTheme.Map.secondaryLabel)
+						.lineLimit(1)
 				}
 			}
 
 			Spacer(minLength: 8)
 
-			Button {
-				// Filters arrive with live friends; keep chrome interactive for now.
-			} label: {
-				Image(systemName: "slider.horizontal.3")
-					.font(.body.weight(.semibold))
-					.foregroundStyle(.primary)
-					.frame(width: 40, height: 40)
-			}
-			.buttonStyle(.plain)
-			.background(.ultraThinMaterial, in: Circle())
+			// Keeps bar height stable; menu expands downward via overlay.
+			Color.clear
+				.frame(width: KismetTheme.Chrome.avatarSize, height: KismetTheme.Chrome.avatarSize)
 		}
 		.padding(.horizontal, 14)
 		.padding(.vertical, 10)
 		.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: KismetTheme.Chrome.headerCornerRadius, style: .continuous))
 		.shadow(color: .black.opacity(0.08), radius: 12, y: 4)
+		.overlay(alignment: .topTrailing) {
+			PresenceModePicker(
+				selection: Bindable(presenceMode).state,
+				isExpanded: $isPresencePickerExpanded
+			)
+			.padding(.top, 10)
+			.padding(.trailing, 14)
+		}
 	}
 
 	private var locationDeniedBanner: some View {
@@ -236,6 +247,7 @@ struct MapHomeView: View {
 						location: locations.userLocation,
 						senderUserId: KeychainStore.get(.userId),
 						friends: socialStore.friends,
+						presence: presenceMode.state,
 						force: true
 					)
 					await refreshSuggestions()
@@ -315,6 +327,7 @@ struct MapHomeView: View {
 			location: locationManager.userLocation,
 			senderUserId: authSession.user?.id ?? KeychainStore.get(.userId),
 			friends: pairedFriends.friends,
+			presence: presenceMode.state,
 			force: force
 		)
 	}
@@ -366,6 +379,7 @@ private struct MapHomePreviewHost: View {
 	@State private var meetupMemoryStore = MeetupMemoryStore(
 		container: try! MeetupModelContainer.makeInMemory()
 	)
+	@State private var presenceMode = PresenceModeStore(state: .available)
 
 	var body: some View {
 		MapHomeView()
@@ -379,7 +393,8 @@ private struct MapHomePreviewHost: View {
 					locationManager: locationManager,
 					locationSharing: locationSharing,
 					friendsStore: pairedFriends,
-					mapFriendsStore: friendsStore
+					mapFriendsStore: friendsStore,
+					presenceMode: presenceMode
 				)
 			)
 			.environment(realtimeClient)
@@ -387,6 +402,7 @@ private struct MapHomePreviewHost: View {
 			.environment(mapWeather)
 			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
+			.environment(presenceMode)
 			.task {
 				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 				await suggestionEngine.refresh(
