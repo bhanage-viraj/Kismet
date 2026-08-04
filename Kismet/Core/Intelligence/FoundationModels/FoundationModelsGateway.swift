@@ -15,6 +15,7 @@ enum FoundationModelsGatewayError: LocalizedError {
 }
 
 /// Thin wrapper around SystemLanguageModel + LanguageModelSession.
+/// iOS 27+: Dynamic Profiles agent (memory → venue → draft). Older OS: single-session legacy path.
 @MainActor
 final class FoundationModelsGateway {
 	private(set) var lastUnavailableReason: String?
@@ -55,10 +56,33 @@ final class FoundationModelsGateway {
 		}
 		lastUnavailableReason = nil
 
+		#if compiler(>=6.4)
+		if #available(iOS 27.0, *) {
+			do {
+				return try await SuggestionAgentRunner.generate(context: context, ranked: ranked)
+			} catch {
+				#if DEBUG
+				print("Suggestion agent failed, falling back: \(error.localizedDescription)")
+				#endif
+			}
+		}
+		#endif
+
+		return try await generateLegacy(context: context, ranked: ranked)
+	}
+
+	private func generateLegacy(
+		context: KismetContext,
+		ranked: [RankedOpportunity]
+	) async throws -> PulseSuggestionBundle {
 		let tool = FindNearbyVenueTool(coordinate: context.user.coordinate)
 		let session = LanguageModelSession(tools: [tool]) {
 			Instructions {
-				PromptBuilder.instructions
+				PromptBuilder.instructions + """
+
+				Also draft a short pulseMessage (1 sentence) the user could send — friendly, \
+				specific, no invented facts. Leave pulseMessage empty only when action is none.
+				"""
 			}
 		}
 		session.prewarm()

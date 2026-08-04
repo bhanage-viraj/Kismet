@@ -26,6 +26,9 @@ struct PulseSuggestion {
 
 	@Guide(description: "One-line reason grounded only in provided facts")
 	var reason: String
+
+	@Guide(description: "Optional short Pulse message ready to send; empty if not drafting")
+	var pulseMessage: String?
 }
 
 @Generable

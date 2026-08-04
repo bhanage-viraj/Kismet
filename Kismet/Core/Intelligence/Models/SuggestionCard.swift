@@ -19,6 +19,8 @@ struct SuggestionCard: Identifiable, Sendable {
 	var confidence: Double
 	var urgency: SuggestionUrgency
 	var isModelGenerated: Bool
+	/// Optional draft Pulse body from the Intelligence Layer (not sent until user/Siri confirms).
+	var pulseMessage: String? = nil
 	/// Optional JPEG/PNG bytes for the friend avatar. When set, widgets persist this into the App Group.
 	var avatarImageData: Data? = nil
 

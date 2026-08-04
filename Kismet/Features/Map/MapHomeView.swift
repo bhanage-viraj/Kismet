@@ -12,6 +12,7 @@ struct MapHomeView: View {
 	@Environment(RealtimeClient.self) private var realtimeClient
 	@Environment(SuggestionEngine.self) private var suggestionEngine
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
+	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
 	@Environment(MapWeatherController.self) private var mapWeather
 	@Environment(PresenceModeStore.self) private var presenceMode
 
@@ -320,6 +321,10 @@ struct MapHomeView: View {
 			people: friendsStore.friends,
 			learned: learned
 		)
+		interestSuggestionStore.refresh(
+			meetups: meetupMemoryStore.meetupSnapshots(),
+			currentInterests: authSession.user?.interests ?? []
+		)
 	}
 
 	private func publishLocation(force: Bool) {
@@ -379,6 +384,7 @@ private struct MapHomePreviewHost: View {
 	@State private var meetupMemoryStore = MeetupMemoryStore(
 		container: try! MeetupModelContainer.makeInMemory()
 	)
+	@State private var interestSuggestionStore = InterestSuggestionStore()
 	@State private var presenceMode = PresenceModeStore(state: .available)
 
 	var body: some View {
@@ -402,6 +408,7 @@ private struct MapHomePreviewHost: View {
 			.environment(mapWeather)
 			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
+			.environment(interestSuggestionStore)
 			.environment(presenceMode)
 			.task {
 				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)

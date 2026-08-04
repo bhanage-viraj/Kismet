@@ -25,6 +25,7 @@ struct KismetApp: App {
 	@State private var mapWeather = AppEnvironment.shared.mapWeather
 	@State private var weatherObstacles = AppEnvironment.shared.weatherObstacles
 	@State private var meetupMemoryStore = AppEnvironment.shared.meetupMemoryStore
+	@State private var interestSuggestionStore = AppEnvironment.shared.interestSuggestionStore
 	@State private var presenceMode = AppEnvironment.shared.presenceMode
 
 	private let meetupContainer = AppEnvironment.shared.meetupModelContainer
@@ -44,6 +45,7 @@ struct KismetApp: App {
 				.environment(mapWeather)
 				.environment(weatherObstacles)
 				.environment(meetupMemoryStore)
+				.environment(interestSuggestionStore)
 				.environment(presenceMode)
 				.modelContainer(meetupContainer)
 				.task {

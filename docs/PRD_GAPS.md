@@ -16,11 +16,11 @@ Snapshot against [`docs/PRD.md`](./PRD.md) after Presence States end-to-end + ea
 | Friend list + who's nearby & available | P0 | **Done (demo) / Partial (durable)** | Friend list; map joins `/map/friends` + decrypted LOCATION blobs | “Nearby while locked” depends on Always + significant-change + (optional) APNs — see Background location below |
 | Remote friend-add (invite codes) | P1 | **Done** | Invite codes + QR (`POST /friends/invite` + redeem) | — |
 | Username search friend-add | P1 | **Cut** | **Not shipping** — invite codes replace this path | No `GET /users/search?username=` / `PublicUsername` planned |
-| **Intelligence Layer** | P1 | **Near done for demo** | Ranker → Foundation Models `@Generable` → `SuggestionStore`; calendar/location/motion/friends; fallback composer; MapKit venue tool | Focus stub; meetup history is local/learning only |
-| Shared Interests | P1 | **Partial** | Onboarding interests → `POST /me/interests`; server intersection on map; ranker signal | Interests plaintext on `UserDocument`; no E2EE `interestMatch` blobs / opt-in sync as PRD described |
-| **Pulse** | P1 | **Partial** | `PulsePublisher` seals `PULSE` blobs with expiry; CTA from suggestions / Siri | **No inbox / UI for incoming Pulses**; presence/interest targeting not wired; client doesn’t ack blobs; server may not accept `PULSE` kind yet |
+| **Intelligence Layer** | P1 | **Near done for demo** | Ranker → FM `@Generable` → `SuggestionStore`; calendar/location/motion/friends; fallback composer; MapKit venue tool; meetup Core Spotlight index; soft interest inference (Profile + map chips); Pulse draft fields | Focus stub; iOS 27 Dynamic Profiles + `SpotlightSearchTool` agent (memory→venue→draft, no PCC) gated — needs iOS 27 runtime + Swift 6.4/Xcode 27 toolchain to compile the agent path |
+| Shared Interests | P1 | **Partial** | Onboarding + Profile editor; hangout-based soft chips; server intersection on map; ranker signal | Interests plaintext on `UserDocument`; no E2EE `interestMatch` blobs / opt-in sync as PRD described |
+| **Pulse** | P1 | **Partial** | `PulsePublisher` seals `PULSE` blobs with expiry; CTA from suggestions / Siri; draft→confirm Siri path | **No inbox / UI for incoming Pulses**; presence/interest targeting not wired; client doesn’t ack blobs; server may not accept `PULSE` kind yet |
 | Widgets (static) | P1 | **Done** | Friend availability + map widgets via App Group / `SuggestionSnapshotWriter` | Copy less specific than PRD “free until 4:15 PM” in all cases |
-| Siri + App Intents | P1 | **Done (baseline)** | Who’s free/nearby, Start Pulse; Eclipse guard on entities | No iOS 27 richer schemas; intents need a prior app refresh for live store data |
+| Siri + App Intents | P1 | **Done (baseline + draft/confirm)** | Who’s free/nearby; Draft Pulse → Confirm Pulse; Start Pulse; Eclipse guard on entities | No iOS 27 richer App Schemas; intents need a prior app refresh for live store data |
 | Shared Live Activities | P2 | **Scaffold / deferred** | Controllers + entitlements exist | `start(...)` not wired from meetup-accept; not shared across friends |
 | Interactive widgets | P2 | **Missing / deferred** | Static widgets + deep links only | No Accept Pulse from home-screen widget |
 | MapKit spot suggestions | P2 (pulled forward) | **Done** | `FindNearbyVenueTool` in the model session | Relies on the model choosing the tool |
@@ -32,6 +32,12 @@ Snapshot against [`docs/PRD.md`](./PRD.md) after Presence States end-to-end + ea
 ---
 
 ## What landed recently
+
+### Intelligence Layer upgrades
+1. **Meetup Spotlight index** — Core Spotlight donations for hangouts + habits; recover via index delegate  
+2. **Dynamic Profiles agent (iOS 27)** — memory → venue → Pulse draft on-device (no PCC); legacy single-session path on older OS / toolchains  
+3. **Soft interest chips** — hangout-category inference; Profile editor + map suggestion Accept/Dismiss  
+4. **Siri draft → confirm** — `DraftPulseIntent` / `ConfirmPulseIntent` (+ Start Pulse still direct-send)  
 
 ### Presence States (complete on client)
 1. **Map header picker** — Available / Friends Only / Approximate / Eclipse  
