@@ -117,14 +117,8 @@ public class BlobService {
 				.toList();
 		realtimeEventPublisher.blobsAvailable(recipients, senderUserId);
 
-		List<String> locationRecipients = blobs.stream()
-				.filter(blob -> blob.getKind() == BlobKind.LOCATION)
-				.map(EncryptedBlobDocument::getRecipientUserId)
-				.distinct()
-				.toList();
-		if (!locationRecipients.isEmpty()) {
-			pushWakeService.wakeRecipientsForLocationBlob(locationRecipients, senderUserId);
-		}
+		wakeForKind(blobs, BlobKind.LOCATION, senderUserId);
+		wakeForKind(blobs, BlobKind.PULSE, senderUserId);
 		return new BlobUploadResponse(blobs.size(), expiresAt);
 	}
 
@@ -172,6 +166,17 @@ public class BlobService {
 			bulk.upsert(slot, update);
 		}
 		bulk.execute();
+	}
+
+	private void wakeForKind(List<EncryptedBlobDocument> blobs, BlobKind kind, String senderUserId) {
+		List<String> recipients = blobs.stream()
+				.filter(blob -> blob.getKind() == kind)
+				.map(EncryptedBlobDocument::getRecipientUserId)
+				.distinct()
+				.toList();
+		if (!recipients.isEmpty()) {
+			pushWakeService.wakeRecipients(recipients, senderUserId, kind.name());
+		}
 	}
 
 	private static BlobKind parseKind(String kind) {

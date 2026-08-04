@@ -55,9 +55,17 @@ public class PushWakeService {
 	 * Fire-and-forget wake. Safe to call from the blob upload path — never blocks the HTTP response.
 	 */
 	public void wakeRecipientsForLocationBlob(Iterable<String> recipientUserIds, String senderUserId) {
+		wakeRecipients(recipientUserIds, senderUserId, "LOCATION");
+	}
+
+	/**
+	 * Fire-and-forget wake for any blob kind (LOCATION, PULSE, …).
+	 */
+	public void wakeRecipients(Iterable<String> recipientUserIds, String senderUserId, String kind) {
 		if (!authTokenProvider.isEnabled()) {
 			return;
 		}
+		String wakeKind = (kind == null || kind.isBlank()) ? "LOCATION" : kind.trim().toUpperCase(Locale.ROOT);
 		for (String recipientUserId : recipientUserIds) {
 			if (recipientUserId == null || recipientUserId.isBlank()) {
 				continue;
@@ -65,7 +73,7 @@ public class PushWakeService {
 			if (!shouldWake(recipientUserId)) {
 				continue;
 			}
-			executor.execute(() -> sendToUser(recipientUserId, senderUserId));
+			executor.execute(() -> sendToUser(recipientUserId, senderUserId, wakeKind));
 		}
 	}
 
@@ -75,14 +83,14 @@ public class PushWakeService {
 		return previous == null || now - previous >= COOLDOWN_MILLIS;
 	}
 
-	private void sendToUser(String recipientUserId, String senderUserId) {
+	private void sendToUser(String recipientUserId, String senderUserId, String kind) {
 		var tokens = pushTokenService.tokensForUser(recipientUserId);
 		if (tokens.isEmpty()) {
 			return;
 		}
 		for (PushTokenDocument token : tokens) {
 			try {
-				sendSilent(token, senderUserId);
+				sendSilent(token, senderUserId, kind);
 			}
 			catch (Exception ex) {
 				log.debug("Silent push failed for user {}: {}", recipientUserId, ex.getMessage());
@@ -90,14 +98,15 @@ public class PushWakeService {
 		}
 	}
 
-	private void sendSilent(PushTokenDocument token, String senderUserId) throws Exception {
+	private void sendSilent(PushTokenDocument token, String senderUserId, String kind) throws Exception {
 		List<ApnsAuthTokenProvider.Account> candidates = candidatesFor(token.getBundleId());
 		if (candidates.isEmpty()) {
 			return;
 		}
 
 		String body = "{\"aps\":{\"content-available\":1},\"type\":\"blob.available\","
-				+ "\"kind\":\"LOCATION\",\"senderUserId\":\"" + jsonEscape(senderUserId) + "\"}";
+				+ "\"kind\":\"" + jsonEscape(kind) + "\",\"senderUserId\":\""
+				+ jsonEscape(senderUserId) + "\"}";
 
 		Exception lastError = null;
 		for (ApnsAuthTokenProvider.Account account : candidates) {
