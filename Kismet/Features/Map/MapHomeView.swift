@@ -337,8 +337,45 @@ struct MapHomeView: View {
 			source: .pulse,
 			outcome: .pending
 		)
+		await startLiveActivity(for: pulse)
 		let venue = pulse.payload.venueName.map { " · \($0)" } ?? ""
 		showToast("Accepted \(pulse.senderDisplayName)'s Pulse\(venue)")
+	}
+
+	@MainActor
+	private func startLiveActivity(for pulse: IncomingPulse) async {
+		let venueName = pulse.payload.venueName ?? pulse.payload.label
+		let youName = authSession.preferredDisplayName
+		let participants: [MeetupActivityAttributes.Participant] = [
+			.init(
+				id: KeychainStore.get(.userId) ?? "you",
+				displayName: youName,
+				initials: String(youName.prefix(1)).uppercased(),
+				status: .nearby,
+				isYou: true
+			),
+			.init(
+				id: pulse.senderUserId,
+				displayName: pulse.senderDisplayName,
+				initials: String(pulse.senderDisplayName.prefix(1)).uppercased(),
+				status: .free,
+				isYou: false
+			)
+		]
+		do {
+			_ = try await MeetupLiveActivityController.start(
+				meetupID: pulse.payload.pulseId,
+				title: pulse.payload.label,
+				venueName: venueName,
+				systemImage: "figure.walk",
+				participants: participants,
+				venueCoordinate: nil,
+				meetAt: pulse.payload.expiresAt,
+				currentLocation: locationManager.userLocation
+			)
+		} catch {
+			// Live Activities may be disabled — Pulse accept still succeeds.
+		}
 	}
 
 	@MainActor
