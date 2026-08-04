@@ -86,6 +86,7 @@ struct StartPulseIntent: AppIntent {
 					source: .pulse,
 					outcome: .pending
 				)
+				env.pendingPulseDraft = nil
 			}
 			return .result(dialog: "Pulse sent to \(card.displayName).")
 		} catch {

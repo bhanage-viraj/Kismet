@@ -6,29 +6,8 @@ struct InterestsView: View {
 
 	var onContinue: ([String]) -> Void = { _ in }
 
-	private let primaryInterests = [
-		Interest(id: "coffee", name: "Coffee", symbol: "cup.and.saucer.fill", color: .orange),
-		Interest(id: "music", name: "Music", symbol: "music.note", color: .red),
-		Interest(id: "art", name: "Art", symbol: "paintpalette.fill", color: .green),
-		Interest(id: "badminton", name: "Badminton", symbol: "figure.badminton", color: .yellow),
-		Interest(id: "football", name: "Football", symbol: "soccerball", color: .blue),
-		Interest(id: "gym", name: "Gym", symbol: "dumbbell.fill", color: .orange),
-		Interest(id: "movies", name: "Movies", symbol: "film.fill", color: .mint),
-		Interest(id: "coding", name: "Coding", symbol: "chevron.left.forwardslash.chevron.right", color: .indigo),
-		Interest(id: "travel", name: "Travel", symbol: "airplane", color: .red),
-	]
-
-	private let moreInterests = [
-		Interest(id: "reading", name: "Reading", symbol: "book.fill", color: .blue),
-		Interest(id: "food", name: "Food", symbol: "fork.knife", color: .orange),
-		Interest(id: "nature", name: "Nature", symbol: "leaf.fill", color: .green),
-		Interest(id: "gaming", name: "Gaming", symbol: "gamecontroller.fill", color: .purple),
-		Interest(id: "photography", name: "Photos", symbol: "camera.fill", color: .cyan),
-		Interest(id: "wellness", name: "Wellness", symbol: "heart.fill", color: .pink),
-	]
-
-	private var allInterests: [Interest] {
-		primaryInterests + moreInterests
+	private var allInterests: [InterestItem] {
+		InterestCatalog.all
 	}
 
 	private var foregroundColor: Color {
@@ -118,7 +97,7 @@ struct InterestsView: View {
 		}
 	}
 
-	private func interestButton(_ interest: Interest) -> some View {
+	private func interestButton(_ interest: InterestItem) -> some View {
 		let isSelected = selectedInterests.contains(interest.id)
 
 		return Button {
@@ -171,13 +150,6 @@ struct InterestsView: View {
 		.accessibilityLabel(interest.name)
 		.accessibilityValue(isSelected ? "Selected" : "Not selected")
 	}
-}
-
-private struct Interest: Identifiable {
-	let id: String
-	let name: String
-	let symbol: String
-	let color: Color
 }
 
 #Preview("Dark") {

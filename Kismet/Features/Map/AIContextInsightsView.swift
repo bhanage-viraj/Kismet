@@ -5,12 +5,15 @@ struct AIContextInsightsView: View {
 
 	let cards: [SuggestionCard]
 	var statusMessage: String?
+	var interestSuggestions: [String] = []
 	var showsHeader: Bool = true
 	var onSelectFriend: (SuggestionCard) -> Void = { _ in }
 	var onCTA: (SuggestionCard) -> Void = { _ in }
 	var onDismiss: (SuggestionCard) -> Void = { _ in }
 	var onFeedback: (SuggestionCard, SuggestionFeedbackAction) -> Void = { _, _ in }
 	var onAppearCard: (SuggestionCard) -> Void = { _ in }
+	var onAcceptInterest: (String) -> Void = { _ in }
+	var onDismissInterest: (String) -> Void = { _ in }
 
 	var body: some View {
 		VStack(spacing: 0) {
@@ -39,7 +42,7 @@ struct AIContextInsightsView: View {
 				)
 				.frame(maxWidth: .infinity, minHeight: 120)
 				.padding(.horizontal, 16)
-			} else if cards.isEmpty {
+			} else if cards.isEmpty, interestSuggestions.isEmpty {
 				ContentUnavailableView(
 					"No nearby context yet",
 					systemImage: "sparkles",
@@ -55,6 +58,14 @@ struct AIContextInsightsView: View {
 								.font(.caption)
 								.foregroundStyle(.secondary)
 								.frame(maxWidth: .infinity, alignment: .leading)
+						}
+
+						if let interestID = interestSuggestions.first {
+							InterestSuggestionChip(
+								interestID: interestID,
+								onAccept: { onAcceptInterest(interestID) },
+								onDismiss: { onDismissInterest(interestID) }
+							)
 						}
 
 						ForEach(cards) { card in
@@ -77,6 +88,41 @@ struct AIContextInsightsView: View {
 			}
 		}
 		.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+	}
+}
+
+private struct InterestSuggestionChip: View {
+	let interestID: String
+	var onAccept: () -> Void
+	var onDismiss: () -> Void
+
+	private var name: String {
+		InterestCatalog.displayName(for: interestID)
+	}
+
+	var body: some View {
+		HStack(spacing: 10) {
+			Image(systemName: InterestCatalog.item(id: interestID)?.symbol ?? "sparkles")
+				.foregroundStyle(InterestCatalog.item(id: interestID)?.color ?? .orange)
+			VStack(alignment: .leading, spacing: 2) {
+				Text("Add \(name) to interests?")
+					.font(.subheadline.weight(.semibold))
+				Text("From your recent hangouts")
+					.font(.caption)
+					.foregroundStyle(.secondary)
+			}
+			Spacer(minLength: 0)
+			Button("Add", action: onAccept)
+				.buttonStyle(.borderedProminent)
+				.controlSize(.small)
+			Button(action: onDismiss) {
+				Image(systemName: "xmark")
+			}
+			.buttonStyle(.borderless)
+			.accessibilityLabel("Dismiss interest suggestion")
+		}
+		.padding(12)
+		.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14))
 	}
 }
 
@@ -161,6 +207,13 @@ private struct InsightCard: View {
 							.font(.caption.weight(.semibold))
 							.foregroundStyle(KismetTheme.Status.free)
 					}
+
+					if let draft = card.pulseMessage, !draft.isEmpty {
+						Text("Draft: \"\(draft)\"")
+							.font(.caption)
+							.foregroundStyle(.secondary)
+							.lineLimit(2)
+					}
 				}
 				.frame(maxWidth: .infinity, alignment: .leading)
 			}
@@ -239,13 +292,32 @@ private struct InsightCard: View {
 	}
 }
 
+#Preview("Interest chip") {
+	AIContextInsightsView(
+		cards: FallbackComposer.cards(
+			from: OpportunityRanker().rank(context: previewContext)
+		),
+		interestSuggestions: ["coffee", "nature"]
+	)
+	.preferredColorScheme(.light)
+}
+
+#Preview("Interest chip only") {
+	AIContextInsightsView(
+		cards: [],
+		interestSuggestions: ["food"]
+	)
+	.preferredColorScheme(.light)
+}
+
 #Preview("Light") {
 	AIContextInsightsView(
 		cards: FallbackComposer.cards(
 			from: OpportunityRanker().rank(
 				context: previewContext
 			)
-		)
+		),
+		interestSuggestions: ["coffee"]
 	)
 	.preferredColorScheme(.light)
 }
@@ -256,7 +328,8 @@ private struct InsightCard: View {
 			from: OpportunityRanker().rank(
 				context: previewContext
 			)
-		)
+		),
+		interestSuggestions: ["nature"]
 	)
 	.preferredColorScheme(.dark)
 }

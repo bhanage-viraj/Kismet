@@ -71,6 +71,7 @@ final class SuggestionEngine {
 					)
 				} else {
 					store.replace(cards: cards, usedModel: true, status: nil, userCoordinate: coordinate)
+					stashPulseDraft(from: cards)
 				}
 				return
 			} catch {
@@ -89,6 +90,19 @@ final class SuggestionEngine {
 			usedModel: false,
 			status: gateway.availabilityMessage(),
 			userCoordinate: coordinate
+		)
+	}
+
+	private func stashPulseDraft(from cards: [SuggestionCard]) {
+		guard let card = cards.first else { return }
+		let message = card.pulseMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard let message, !message.isEmpty else { return }
+		AppEnvironment.shared.pendingPulseDraft = PulseDraft(
+			friendID: card.friendID,
+			displayName: card.displayName,
+			venueName: card.venueName,
+			message: message,
+			suggestionCardID: card.id
 		)
 	}
 
@@ -140,7 +154,11 @@ final class SuggestionEngine {
 				venueETAMinutes: suggestion.venueETAMinutes,
 				confidence: suggestion.confidence,
 				urgency: urgency,
-				isModelGenerated: true
+				isModelGenerated: true,
+				pulseMessage: {
+					let trimmed = suggestion.pulseMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
+					return (trimmed?.isEmpty == false) ? trimmed : nil
+				}()
 			)
 		}
 	}

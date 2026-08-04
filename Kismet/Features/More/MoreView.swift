@@ -40,6 +40,11 @@ struct MoreView: View {
 			}
 
 			Section("Account") {
+				NavigationLink {
+					ProfileView()
+				} label: {
+					Label("Profile & interests", systemImage: "person.crop.circle")
+				}
 				LabeledContent("Name", value: authSession.preferredDisplayName)
 				LabeledContent("Email", value: authSession.user?.email ?? "—")
 				Button("Sign Out", role: .destructive) {

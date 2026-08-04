@@ -17,7 +17,10 @@ final class AppEnvironment {
 	let weatherObstacles: WeatherObstacleStore
 	let meetupModelContainer: ModelContainer
 	let meetupMemoryStore: MeetupMemoryStore
+	let interestSuggestionStore: InterestSuggestionStore
 	let presenceMode: PresenceModeStore
+	/// Last Pulse draft prepared by Intelligence / Siri (not sent until confirm).
+	var pendingPulseDraft: PulseDraft?
 
 	init(
 		authSession: AuthSession? = nil,
@@ -72,6 +75,8 @@ final class AppEnvironment {
 		}
 		self.meetupModelContainer = container
 		self.meetupMemoryStore = MeetupMemoryStore(container: container)
+		self.interestSuggestionStore = InterestSuggestionStore()
+		self.meetupMemoryStore.attachSpotlightIndexer()
 	}
 
 	static let shared = AppEnvironment()

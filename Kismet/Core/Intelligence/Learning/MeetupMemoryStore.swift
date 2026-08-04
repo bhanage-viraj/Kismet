@@ -21,6 +21,12 @@ final class MeetupMemoryStore {
 		self.init(modelContext: ModelContext(container))
 	}
 
+	/// Call once after environment is ready so Spotlight can recover items.
+	func attachSpotlightIndexer() {
+		MeetupSpotlightIndexer.shared.attach(memoryStore: self)
+		MeetupSpotlightIndexer.shared.reindexAll(from: self)
+	}
+
 	// MARK: - Meetup events
 
 	@discardableResult
@@ -44,6 +50,7 @@ final class MeetupMemoryStore {
 		modelContext.insert(event)
 		save()
 		refreshCaches()
+		indexMeetup(event)
 		return event
 	}
 
@@ -53,6 +60,7 @@ final class MeetupMemoryStore {
 		event.endedAt = endedAt
 		save()
 		refreshCaches()
+		indexMeetup(event)
 	}
 
 	func markCompleted(
@@ -84,6 +92,7 @@ final class MeetupMemoryStore {
 		}
 		save()
 		refreshCaches()
+		indexMeetup(event)
 	}
 
 	func meetups(for friendUserId: String) -> [MeetupEvent] {
@@ -167,6 +176,22 @@ final class MeetupMemoryStore {
 		return slice
 	}
 
+	private func indexMeetup(_ event: MeetupEvent) {
+		MeetupSpotlightIndexer.shared.upsertMeetup(
+			MeetupEventSnapshot(
+				id: event.id,
+				friendUserId: event.friendUserId,
+				friendDisplayName: event.friendDisplayName,
+				startedAt: event.startedAt,
+				endedAt: event.endedAt,
+				venueName: event.venueName,
+				venueCategory: event.venueCategory,
+				source: event.source,
+				outcome: event.outcome
+			)
+		)
+	}
+
 	// MARK: - Learned profile snapshot
 
 	func upsertLearnedProfile(
@@ -192,6 +217,7 @@ final class MeetupMemoryStore {
 		}
 		save()
 		refreshCaches()
+		MeetupSpotlightIndexer.shared.upsertHabits(from: self)
 	}
 
 	// MARK: - Private

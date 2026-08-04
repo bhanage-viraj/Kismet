@@ -69,6 +69,7 @@ struct MainTabView: View {
 	@Environment(SuggestionEngine.self) private var suggestionEngine
 	@Environment(PulsePublisher.self) private var pulsePublisher
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
+	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
 	@Environment(MapWeatherController.self) private var mapWeather
 	@Environment(WeatherObstacleStore.self) private var weatherObstacleStore
 
@@ -183,6 +184,7 @@ struct MainTabView: View {
 				AIContextInsightsView(
 					cards: suggestionCards,
 					statusMessage: suggestionEngine.store.statusMessage,
+					interestSuggestions: interestSuggestionStore.pending,
 					showsHeader: true,
 					onSelectFriend: { card in
 						friendsStore.select(card.friendID)
@@ -207,6 +209,12 @@ struct MainTabView: View {
 						guard !recordedShownCardIDs.contains(card.id) else { return }
 						recordedShownCardIDs.insert(card.id)
 						recordFeedback(card, action: .shown)
+					},
+					onAcceptInterest: { interestID in
+						Task { await acceptInterestSuggestion(interestID) }
+					},
+					onDismissInterest: { interestID in
+						interestSuggestionStore.dismiss(interestID)
 					}
 				)
 				.frame(height: expandedContentHeight)
@@ -378,6 +386,23 @@ struct MainTabView: View {
 			reasonCodes: card.reasonCodes.map(\.rawValue)
 		)
 	}
+
+	@MainActor
+	private func acceptInterestSuggestion(_ interestID: String) async {
+		var next = Set(authSession.user?.interests ?? [])
+		next.insert(interestID)
+		let ok = await authSession.saveInterests(Array(next).sorted())
+		if ok {
+			interestSuggestionStore.removeAccepted(interestID)
+			showToast("Added \(InterestCatalog.displayName(for: interestID))")
+			interestSuggestionStore.refresh(
+				meetups: meetupMemoryStore.meetupSnapshots(),
+				currentInterests: authSession.user?.interests ?? Array(next)
+			)
+		} else {
+			showToast("Couldn't save interest")
+		}
+	}
 }
 
 // MARK: - Tab bar content (glass capsule is applied by parent)
@@ -437,6 +462,7 @@ private struct MainTabPreviewHost: View {
 	@State private var meetupMemoryStore = MeetupMemoryStore(
 		container: try! MeetupModelContainer.makeInMemory()
 	)
+	@State private var interestSuggestionStore = InterestSuggestionStore()
 	@State private var presenceMode = PresenceModeStore(state: .available)
 
 	var body: some View {
@@ -461,6 +487,7 @@ private struct MainTabPreviewHost: View {
 			.environment(mapWeather)
 			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
+			.environment(interestSuggestionStore)
 			.environment(presenceMode)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
