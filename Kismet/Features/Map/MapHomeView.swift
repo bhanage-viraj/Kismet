@@ -15,6 +15,7 @@ struct MapHomeView: View {
 	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
 	@Environment(MapWeatherController.self) private var mapWeather
 	@Environment(PresenceModeStore.self) private var presenceMode
+	@Environment(PulseInboxStore.self) private var pulseInbox
 
 	@State private var cameraPosition: MapCameraPosition = .region(
 		MKCoordinateRegion(
@@ -56,6 +57,17 @@ struct MapHomeView: View {
 						.padding(.horizontal, 16)
 						.trackWeatherObstacle("map.locationBanner", cornerRadius: 16)
 						.transition(.move(edge: .top).combined(with: .opacity))
+				}
+
+				if let pulse = pulseInbox.activePulses.first, friendsStore.selectedFriend == nil {
+					PulseInboxBanner(
+						pulse: pulse,
+						onAccept: { Task { await acceptIncomingPulse(pulse) } },
+						onDismiss: { Task { await pulseInbox.acknowledge(pulse) } }
+					)
+					.padding(.horizontal, 16)
+					.trackWeatherObstacle("map.pulseInbox", cornerRadius: 16)
+					.transition(.move(edge: .top).combined(with: .opacity))
 				}
 			}
 			.padding(.top, 8)
@@ -240,6 +252,7 @@ struct MapHomeView: View {
 				switch event.type {
 				case "blob.available":
 					await mapStore.refresh(around: locations.displayCoordinate)
+					await pulseInbox.refresh(friends: socialStore.friends)
 					await refreshSuggestions()
 				case "friend.pair.created":
 					await socialStore.refresh()
@@ -251,14 +264,17 @@ struct MapHomeView: View {
 						presence: presenceMode.state,
 						force: true
 					)
+					await pulseInbox.refresh(friends: socialStore.friends)
 					await refreshSuggestions()
 				case "friend.pair.revoked":
 					await socialStore.refresh()
 					await mapStore.refresh(around: locations.displayCoordinate)
+					pulseInbox.reset()
 					await refreshSuggestions()
 				default:
 					await socialStore.refresh()
 					await mapStore.refresh(around: locations.displayCoordinate)
+					await pulseInbox.refresh(friends: socialStore.friends)
 					await refreshSuggestions()
 				}
 			}
@@ -293,6 +309,7 @@ struct MapHomeView: View {
 		locationManager.prepareForMapAppearance()
 		await pairedFriends.refresh()
 		await friendsStore.refresh(around: locationManager.displayCoordinate)
+		await pulseInbox.refresh(friends: pairedFriends.friends)
 
 		try? await Task.sleep(for: .milliseconds(50))
 		guard !Task.isCancelled else { return }
@@ -306,7 +323,22 @@ struct MapHomeView: View {
 	private func refreshMapData() async {
 		await pairedFriends.refresh()
 		await friendsStore.refresh(around: locationManager.displayCoordinate)
+		await pulseInbox.refresh(friends: pairedFriends.friends)
 		await refreshSuggestions()
+	}
+
+	@MainActor
+	private func acceptIncomingPulse(_ pulse: IncomingPulse) async {
+		await pulseInbox.acknowledge(pulse)
+		meetupMemoryStore.recordMeetup(
+			friendUserId: pulse.senderUserId,
+			friendDisplayName: pulse.senderDisplayName,
+			venueName: pulse.payload.venueName,
+			source: .pulse,
+			outcome: .pending
+		)
+		let venue = pulse.payload.venueName.map { " · \($0)" } ?? ""
+		showToast("Accepted \(pulse.senderDisplayName)'s Pulse\(venue)")
 	}
 
 	@MainActor
@@ -386,6 +418,7 @@ private struct MapHomePreviewHost: View {
 	)
 	@State private var interestSuggestionStore = InterestSuggestionStore()
 	@State private var presenceMode = PresenceModeStore(state: .available)
+	@State private var pulseInbox = PulseInboxStore()
 
 	var body: some View {
 		MapHomeView()
@@ -410,6 +443,7 @@ private struct MapHomePreviewHost: View {
 			.environment(meetupMemoryStore)
 			.environment(interestSuggestionStore)
 			.environment(presenceMode)
+			.environment(pulseInbox)
 			.task {
 				friendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 				await suggestionEngine.refresh(

@@ -86,7 +86,7 @@ final class BackgroundProximityController {
 		}
 	}
 
-	/// Called from a silent APNs wake when a friend uploaded a LOCATION blob.
+	/// Called from a silent APNs wake when a friend uploaded a LOCATION or PULSE blob.
 	@discardableResult
 	func handleRemoteWake(userInfo: [AnyHashable: Any]) async -> Bool {
 		guard isEnabled else { return false }
@@ -95,8 +95,14 @@ final class BackgroundProximityController {
 		if let type, type != "blob.available" {
 			return false
 		}
-		if let kind, kind != "LOCATION" {
+		if let kind, kind != "LOCATION", kind != "PULSE" {
 			return false
+		}
+
+		if kind == "PULSE" {
+			await friendsStore.refresh()
+			await AppEnvironment.shared.pulseInbox.refresh(friends: friendsStore.friends)
+			return true
 		}
 
 		// Spend a little background budget trying for a fresh fix before distance math.
