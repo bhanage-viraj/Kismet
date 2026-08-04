@@ -17,6 +17,10 @@ struct NearbyMediumView: View {
 		VStack(alignment: .leading, spacing: sectionSpacing) {
 			header
 
+			if let pulse = WidgetAppGroup.loadOpenPulse() {
+				openPulseRow(pulse)
+			}
+
 			if cards.isEmpty {
 				Text("No one nearby")
 					.font(.caption)
@@ -25,7 +29,7 @@ struct NearbyMediumView: View {
 				Spacer(minLength: 0)
 			} else {
 				VStack(spacing: rowSpacing) {
-					ForEach(cards.prefix(3)) { card in
+					ForEach(cards.prefix(openPulseVisible ? 2 : 3)) { card in
 						FriendListRow(
 							card: card,
 							trailing: .statusDot,
@@ -43,6 +47,33 @@ struct NearbyMediumView: View {
 		.containerBackground(for: .widget) {
 			ContainerRelativeShape()
 				.fill(.background)
+		}
+	}
+
+	private var openPulseVisible: Bool {
+		WidgetAppGroup.loadOpenPulse() != nil
+	}
+
+	@ViewBuilder
+	private func openPulseRow(_ pulse: WidgetAppGroup.OpenPulse) -> some View {
+		HStack(spacing: 8) {
+			Text(pulse.emoji)
+			VStack(alignment: .leading, spacing: 1) {
+				Text(pulse.senderDisplayName)
+					.font(.caption.weight(.semibold))
+					.lineLimit(1)
+				Text(pulse.label)
+					.font(.caption2)
+					.foregroundStyle(.secondary)
+					.lineLimit(1)
+			}
+			Spacer(minLength: 0)
+			Button(intent: AcceptPulseIntent(blobId: pulse.blobId)) {
+				Text("Accept")
+					.font(.caption2.weight(.bold))
+			}
+			.buttonStyle(.borderedProminent)
+			.tint(PresenceStatusColor.free)
 		}
 	}
 
