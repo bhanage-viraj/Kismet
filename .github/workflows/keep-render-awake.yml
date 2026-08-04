@@ -1,0 +1,23 @@
+# Free Render web services sleep after ~15 min idle. Ping health often enough
+# to keep the instance warm so TestFlight / App Review sign-in does not hit a
+# 2-minute cold start. Uses GitHub Actions (free) — no paid Render plan needed.
+#
+# Note: free Render instances still have a monthly hour quota. Continuous
+# keep-alive uses most of that quota; upgrade later if you need true always-on.
+name: Keep Render awake
+
+on:
+  schedule:
+    # Every 10 minutes (Render free sleeps around 15 min of inactivity).
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wake kismet-server
+        run: |
+          curl -fsS --max-time 120 \
+            "https://kismet-4kbu.onrender.com/actuator/health" \
+            || true

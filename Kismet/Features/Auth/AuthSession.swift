@@ -146,10 +146,15 @@ final class AuthSession {
 			)
 
 			do {
-				let response: AuthResponseDTO = try await client.post(
-					"/auth/apple",
+				// Free Render instances sleep when idle; wake + long timeout + retries
+				// cover the ~2 min cold start that was failing App Review sign-in.
+				await client.wakeServer()
+				let response: AuthResponseDTO = try await client.requestWithTransientRetry(
+					method: "POST",
+					path: "/auth/apple",
 					body: request,
-					authorized: false
+					authorized: false,
+					attempts: 3
 				)
 				try KeychainStore.set(response.accessToken, for: .accessToken)
 				try KeychainStore.set(response.refreshToken, for: .refreshToken)
