@@ -5,6 +5,8 @@ import WidgetKit
 enum WidgetAppGroup {
 	static let suiteName = "group.sanjivanand.kismet"
 	static let suggestionSnapshotKey = "suggestionSnapshot"
+	static let openPulseKey = "openPulseSnapshot"
+	static let pendingAcceptPulseBlobIdKey = "pendingAcceptPulseBlobId"
 	static let widgetKind = "FriendAvailabilityWidget"
 	static let meetupWidgetKind = "SuggestedMeetupWidget"
 	static let mapWidgetKind = "FriendsMapLargeWidget"
@@ -25,6 +27,17 @@ enum WidgetAppGroup {
 		var distanceText: String?
 		var whenText: String?
 		var systemImage: String
+	}
+
+	struct OpenPulse: Codable, Equatable {
+		var blobId: String
+		var senderUserId: String
+		var senderDisplayName: String
+		var emoji: String
+		var label: String
+		var venueName: String?
+		var expiresAt: Date
+		var pulseId: String
 	}
 
 	struct Card: Codable, Identifiable, Equatable {
@@ -97,6 +110,29 @@ enum WidgetAppGroup {
 
 	static func clearSnapshot() {
 		UserDefaults(suiteName: suiteName)?.removeObject(forKey: suggestionSnapshotKey)
+	}
+
+	static func loadOpenPulse() -> OpenPulse? {
+		guard let data = UserDefaults(suiteName: suiteName)?.data(forKey: openPulseKey) else {
+			return nil
+		}
+		guard let pulse = try? JSONDecoder().decode(OpenPulse.self, from: data) else {
+			return nil
+		}
+		guard pulse.expiresAt > Date() else { return nil }
+		return pulse
+	}
+
+	static var pendingAcceptPulseBlobId: String? {
+		get { UserDefaults(suiteName: suiteName)?.string(forKey: pendingAcceptPulseBlobIdKey) }
+		set {
+			let defaults = UserDefaults(suiteName: suiteName)
+			if let newValue {
+				defaults?.set(newValue, forKey: pendingAcceptPulseBlobIdKey)
+			} else {
+				defaults?.removeObject(forKey: pendingAcceptPulseBlobIdKey)
+			}
+		}
 	}
 
 	static func clearCachedMapImage() {

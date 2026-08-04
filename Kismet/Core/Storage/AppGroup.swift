@@ -4,6 +4,8 @@ import UIKit
 enum AppGroup {
 	static let suiteName = "group.sanjivanand.kismet"
 	static let suggestionSnapshotKey = "suggestionSnapshot"
+	static let openPulseKey = "openPulseSnapshot"
+	static let pendingAcceptPulseBlobIdKey = "pendingAcceptPulseBlobId"
 	static let widgetKind = "FriendAvailabilityWidget"
 	static let meetupWidgetKind = "SuggestedMeetupWidget"
 	static let mapWidgetKind = "FriendsMapLargeWidget"
@@ -38,6 +40,18 @@ enum AppGroup {
 		var distanceText: String?
 		var whenText: String?
 		var systemImage: String
+	}
+
+	/// Newest active incoming Pulse for interactive widgets.
+	struct OpenPulse: Codable, Sendable, Equatable {
+		var blobId: String
+		var senderUserId: String
+		var senderDisplayName: String
+		var emoji: String
+		var label: String
+		var venueName: String?
+		var expiresAt: Date
+		var pulseId: String
 	}
 
 	struct Card: Codable, Identifiable, Sendable, Equatable {
@@ -100,6 +114,37 @@ enum AppGroup {
 			return nil
 		}
 		return snapshot
+	}
+
+	static func saveOpenPulse(_ pulse: OpenPulse?) {
+		guard let defaults else { return }
+		guard let pulse else {
+			defaults.removeObject(forKey: openPulseKey)
+			return
+		}
+		guard let data = try? JSONEncoder().encode(pulse) else { return }
+		defaults.set(data, forKey: openPulseKey)
+	}
+
+	static func loadOpenPulse() -> OpenPulse? {
+		guard let data = defaults?.data(forKey: openPulseKey) else { return nil }
+		guard let pulse = try? JSONDecoder().decode(OpenPulse.self, from: data) else { return nil }
+		guard pulse.expiresAt > Date() else {
+			saveOpenPulse(nil)
+			return nil
+		}
+		return pulse
+	}
+
+	static var pendingAcceptPulseBlobId: String? {
+		get { defaults?.string(forKey: pendingAcceptPulseBlobIdKey) }
+		set {
+			if let newValue {
+				defaults?.set(newValue, forKey: pendingAcceptPulseBlobIdKey)
+			} else {
+				defaults?.removeObject(forKey: pendingAcceptPulseBlobIdKey)
+			}
+		}
 	}
 
 	/// Preview hosts and MockFriendsProvider use `preview-` / `mock-` IDs.
