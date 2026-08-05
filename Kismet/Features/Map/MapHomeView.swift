@@ -27,6 +27,7 @@ struct MapHomeView: View {
 	@State private var ctaToast: String?
 	@State private var didCenterOnUser = false
 	@State private var isPresencePickerExpanded = false
+	@State private var presentedPulse: IncomingPulse?
 
 	private var displayName: String {
 		authSession.preferredDisplayName
@@ -62,12 +63,13 @@ struct MapHomeView: View {
 				if let pulse = pulseInbox.activePulses.first, friendsStore.selectedFriend == nil {
 					PulseInboxBanner(
 						pulse: pulse,
-						onAccept: { Task { await acceptIncomingPulse(pulse) } },
+						onAccept: { presentedPulse = pulse },
 						onDismiss: { Task { await pulseInbox.acknowledge(pulse) } }
 					)
 					.padding(.horizontal, 16)
 					.trackWeatherObstacle("map.pulseInbox", cornerRadius: 16)
 					.transition(.move(edge: .top).combined(with: .opacity))
+					.onTapGesture { presentedPulse = pulse }
 				}
 			}
 			.padding(.top, 8)
@@ -113,6 +115,36 @@ struct MapHomeView: View {
 			}
 		}
 		.animation(.spring(response: 0.34, dampingFraction: 0.86), value: friendsStore.selectedFriendID)
+		.sheet(item: $presentedPulse) { pulse in
+			PulseInviteDetailView(
+				pulse: pulse,
+				attendees: [
+					.init(id: pulse.senderUserId, displayName: pulse.senderDisplayName),
+				],
+				goingCount: 1,
+				maybeCount: 0,
+				onGoing: {
+					presentedPulse = nil
+					Task { await acceptIncomingPulse(pulse) }
+				},
+				onMaybe: {
+					presentedPulse = nil
+					Task {
+						await pulseInbox.acknowledge(pulse)
+						meetupMemoryStore.recordMeetup(
+							friendUserId: pulse.senderUserId,
+							friendDisplayName: pulse.senderDisplayName,
+							venueName: pulse.payload.venueName,
+							source: .pulse,
+							outcome: .pending
+						)
+						showToast("Maybe on \(pulse.senderDisplayName)'s Pulse")
+					}
+				}
+			)
+			.presentationDetents([.large])
+			.presentationDragIndicator(.hidden)
+		}
 		.task {
 			await runMapSession()
 		}
@@ -381,7 +413,7 @@ struct MapHomeView: View {
 				systemImage: "figure.walk",
 				participants: participants,
 				venueCoordinate: nil,
-				meetAt: pulse.payload.expiresAt,
+				meetAt: pulse.payload.plannedAt,
 				currentLocation: locationManager.userLocation
 			)
 		} catch {

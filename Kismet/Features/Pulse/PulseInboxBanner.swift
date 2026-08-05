@@ -28,6 +28,7 @@ struct PulseInboxBanner: View {
 				.buttonStyle(.borderedProminent)
 				.tint(KismetTheme.Status.free)
 				.controlSize(.small)
+				.accessibilityHint("Opens Pulse details")
 
 			Button(action: onDismiss) {
 				Image(systemName: "xmark")

@@ -3,7 +3,7 @@ import UIKit
 import WidgetKit
 
 enum WidgetAppGroup {
-	static let suiteName = "group.sanjivanand.kismet"
+	static let suiteName = "group.bhanageviraj.indeKismet"
 	static let suggestionSnapshotKey = "suggestionSnapshot"
 	static let openPulseKey = "openPulseSnapshot"
 	static let pendingAcceptPulseBlobIdKey = "pendingAcceptPulseBlobId"

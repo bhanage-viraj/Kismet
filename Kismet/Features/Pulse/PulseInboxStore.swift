@@ -34,7 +34,7 @@ final class PulseInboxStore {
 
 		do {
 			let pending: PendingBlobsResponseDTO = try await client.get("/blobs/pending")
-			let names = Dictionary(uniqueKeysWithValues: friends.map { ($0.userId, $0.displayName) })
+			let names = Dictionary(uniqueKeysWithValues: friends.map { ($0.userId, $0.displayName ?? "Friend") })
 			let keys = Dictionary(
 				uniqueKeysWithValues: friends.compactMap { friend -> (String, String)? in
 					guard let key = friend.publicKey, !key.isEmpty else { return nil }

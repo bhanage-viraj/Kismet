@@ -78,6 +78,7 @@ struct MainTabView: View {
 	@State private var dragOffset: CGFloat = 0
 	@State private var ctaToast: String?
 	@State private var recordedShownCardIDs: Set<String> = []
+	@State private var composeDraft: PulseComposeDraft?
 	@Namespace private var glassNamespace
 
 	/// Insights accessory sits above the tab pill (Map only, no person detail).
@@ -151,6 +152,17 @@ struct MainTabView: View {
 		.onAppear {
 			weatherObstacleStore.remove("chrome.bottomStack")
 		}
+		.sheet(item: $composeDraft) { draft in
+			PulseComposeSheetHost(
+				draft: draft,
+				isSending: pulsePublisher.isSending,
+				onSend: { edited in
+					Task { await sendPulse(draft: edited) }
+				}
+			)
+			.presentationDetents([.large])
+			.presentationDragIndicator(.visible)
+		}
 		.onChange(of: selectedTab) { _, _ in
 			insightsDetent = .collapsed
 			dragOffset = 0
@@ -190,7 +202,7 @@ struct MainTabView: View {
 						friendsStore.select(card.friendID)
 					},
 					onCTA: { card in
-						Task { await sendPulse(for: card) }
+						composeDraft = .from(card: card)
 					},
 					onDismiss: { card in
 						recordFeedback(card, action: .dismissed)
@@ -356,27 +368,36 @@ struct MainTabView: View {
 	}
 
 	@MainActor
-	private func sendPulse(for card: SuggestionCard) async {
+	private func sendPulse(draft: PulseComposeDraft) async {
 		do {
 			let pulse = try await pulsePublisher.send(
-				from: card,
+				draft: draft,
 				senderUserId: authSession.user?.id ?? KeychainStore.get(.userId),
 				friends: pairedFriends.friends
 			)
-			recordFeedback(card, action: .cta)
+			if let cardID = draft.suggestionCardID,
+			   let card = suggestionCards.first(where: { $0.id == cardID }) {
+				recordFeedback(card, action: .cta)
+			}
 			meetupMemoryStore.recordMeetup(
-				friendUserId: card.friendID,
-				friendDisplayName: card.displayName,
-				venueName: card.venueName,
+				friendUserId: draft.recipientUserId,
+				friendDisplayName: draft.recipientDisplayName,
+				venueName: draft.venueName.isEmpty ? nil : draft.venueName,
 				source: .pulse,
 				outcome: .pending
 			)
-			let venue = card.venueName.map { " · \($0)" } ?? ""
-			showToast("Pulse sent to \(card.displayName)\(venue)")
+			composeDraft = nil
+			let venue = draft.venueName.isEmpty ? "" : " · \(draft.venueName)"
+			showToast("Pulse sent to \(draft.recipientDisplayName)\(venue)")
 			_ = pulse
 		} catch {
 			showToast((error as? LocalizedError)?.errorDescription ?? "Couldn't send Pulse")
 		}
+	}
+
+	@MainActor
+	private func sendPulse(for card: SuggestionCard) async {
+		await sendPulse(draft: .from(card: card))
 	}
 
 	private func recordFeedback(_ card: SuggestionCard, action: SuggestionFeedbackAction) {
