@@ -70,8 +70,6 @@ struct MainTabView: View {
 	@Environment(PulsePublisher.self) private var pulsePublisher
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
 	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
-	@Environment(MapWeatherController.self) private var mapWeather
-	@Environment(WeatherObstacleStore.self) private var weatherObstacleStore
 
 	@State private var selectedTab: AppTab = .map
 	@State private var insightsDetent: InsightsDetent = .collapsed
@@ -80,7 +78,7 @@ struct MainTabView: View {
 	@State private var recordedShownCardIDs: Set<String> = []
 	@Namespace private var glassNamespace
 
-	/// Insights accessory sits above the tab pill (Map only, no person detail).
+	/// Insights card floats above the native tab bar (Map only, no person detail).
 	private var showsInsights: Bool {
 		selectedTab == .map && friendsStore.selectedFriend == nil
 	}
@@ -96,37 +94,25 @@ struct MainTabView: View {
 	}
 
 	var body: some View {
-		ZStack(alignment: .bottom) {
-			tabContent
-				.frame(maxWidth: .infinity, maxHeight: .infinity)
-
-			GlassEffectContainer(spacing: 12) {
-				VStack(spacing: 12) {
-					if showsInsights {
-						insightsAccessory
-							// Track layout bounds before glassEffect (glass can swallow geometry probes).
-							.trackWeatherObstacle(
-								"chrome.insights",
-								cornerRadius: insightsDetent == .collapsed ? 22 : 28
-							)
-							.glassEffect(
-								.regular,
-								in: .rect(cornerRadius: insightsDetent == .collapsed ? 22 : 28)
-							)
-							.glassEffectID("insights", in: glassNamespace)
-					}
-
-					GlassTabBar(selected: $selectedTab)
-						.padding(.horizontal, 10)
-						.padding(.vertical, 10)
-						.trackWeatherObstacle("chrome.tabBar", cornerRadius: .infinity)
-						.glassEffect(.regular, in: .capsule)
-						.glassEffectID("tabbar", in: glassNamespace)
+		ZStack {
+			TabView(selection: $selectedTab) {
+				Tab(AppTab.map.title, systemImage: AppTab.map.icon, value: AppTab.map) {
+					mapTabRoot
 				}
-				.padding(.horizontal, 16)
+
+				Tab(AppTab.radar.title, systemImage: AppTab.radar.icon, value: AppTab.radar) {
+					RadarView(embedded: false)
+				}
+
+				Tab(AppTab.timeline.title, systemImage: AppTab.timeline.icon, value: AppTab.timeline) {
+					TimelineView(embedded: false)
+				}
+
+				Tab(AppTab.more.title, systemImage: AppTab.more.icon, value: AppTab.more) {
+					MoreView(embedded: false)
+				}
 			}
-			.animation(.snappy, value: showsInsights)
-			.animation(.snappy, value: insightsDetent)
+			.tabBarMinimizeBehavior(.onScrollDown)
 
 			if let ctaToast {
 				Text(ctaToast)
@@ -134,22 +120,10 @@ struct MainTabView: View {
 					.padding(.horizontal, 14)
 					.padding(.vertical, 10)
 					.background(.ultraThinMaterial, in: Capsule())
-					.trackWeatherObstacle("chrome.toast", cornerRadius: .infinity)
 					.padding(.top, 72)
 					.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 					.zIndex(9)
 			}
-
-			MapWeatherOverlay(
-				condition: mapWeather.condition,
-				intensity: mapWeather.intensity,
-				obstacles: weatherObstacleStore.obstacles
-			)
-			.ignoresSafeArea()
-			.zIndex(10)
-		}
-		.onAppear {
-			weatherObstacleStore.remove("chrome.bottomStack")
 		}
 		.onChange(of: selectedTab) { _, _ in
 			insightsDetent = .collapsed
@@ -159,14 +133,27 @@ struct MainTabView: View {
 			insightsDetent = .collapsed
 			dragOffset = 0
 		}
-		.onChange(of: showsInsights) { _, show in
-			if !show {
-				weatherObstacleStore.remove("chrome.insights")
-			}
-			// Drop the old full-width stack probe if it was ever registered.
-			weatherObstacleStore.remove("chrome.bottomStack")
-		}
+		.animation(.snappy, value: showsInsights)
+		.animation(.snappy, value: insightsDetent)
 		.ignoresSafeArea(.keyboard)
+	}
+
+	private var mapTabRoot: some View {
+		MapHomeView()
+			// Sits just above the native tab bar with a small gap.
+			.safeAreaInset(edge: .bottom, spacing: 8) {
+				if showsInsights {
+					insightsAccessory
+						.glassEffect(
+							.regular,
+							in: .rect(cornerRadius: insightsDetent == .collapsed ? 22 : 28)
+						)
+						.glassEffectID("insights", in: glassNamespace)
+						.padding(.horizontal, 16)
+						.padding(.bottom, 8)
+						.transition(.move(edge: .bottom).combined(with: .opacity))
+				}
+			}
 	}
 
 	@ViewBuilder
@@ -316,35 +303,6 @@ struct MainTabView: View {
 			}
 	}
 
-	@ViewBuilder
-	private var tabContent: some View {
-		// Keep MapKit mounted across tabs. Destroying `Map` mid-frame races Metal
-		// command buffers and trips MTLDebugDevice asserts in Debug.
-		ZStack {
-			MapHomeView()
-				.opacity(selectedTab == .map ? 1 : 0)
-				.allowsHitTesting(selectedTab == .map)
-				.accessibilityHidden(selectedTab != .map)
-
-			if selectedTab != .map {
-				Group {
-					switch selectedTab {
-					case .map:
-						EmptyView()
-					case .radar:
-						RadarView(embedded: false)
-					case .timeline:
-						TimelineView(embedded: false)
-					case .more:
-						MoreView(embedded: false)
-					}
-				}
-				.safeAreaPadding(.bottom, 88)
-				.transition(.opacity)
-			}
-		}
-	}
-
 	private func showToast(_ message: String) {
 		ctaToast = message
 		Task {
@@ -405,38 +363,6 @@ struct MainTabView: View {
 	}
 }
 
-// MARK: - Tab bar content (glass capsule is applied by parent)
-
-private struct GlassTabBar: View {
-	@Binding var selected: AppTab
-
-	var body: some View {
-		HStack(spacing: 0) {
-			ForEach(AppTab.allCases) { tab in
-				Button {
-					withAnimation(.snappy) { selected = tab }
-				} label: {
-					VStack(spacing: 4) {
-						Image(systemName: tab.icon)
-							.font(.system(size: 20))
-						Text(tab.title)
-							.font(.caption2)
-							.lineLimit(1)
-							.minimumScaleFactor(0.85)
-					}
-					.foregroundStyle(selected == tab ? Color.accentColor : .primary)
-					.frame(maxWidth: .infinity)
-					.padding(.vertical, 2)
-				}
-				.buttonStyle(.plain)
-			}
-		}
-		.padding(.horizontal, 6)
-	}
-}
-
-// The preview helpers below are DEBUG-only, so the preview must be too —
-// otherwise a Release build fails on symbols that were compiled out.
 #if DEBUG
 #Preview("Light") {
 	MainTabPreviewHost()
@@ -449,22 +375,55 @@ private struct GlassTabBar: View {
 }
 
 private struct MainTabPreviewHost: View {
-	@State private var authSession = AuthSession.previewSignedIn()
-	@State private var locationManager = VisitLocationManager()
-	@State private var mapFriendsStore = MapFriendsStore()
-	@State private var friendsStore = FriendsStore.preview()
-	@State private var locationSharing = LocationSharingService()
-	@State private var realtimeClient = RealtimeClient()
-	@State private var suggestionEngine = SuggestionEngine()
-	@State private var pulsePublisher = PulsePublisher()
-	@State private var mapWeather = MapWeatherController()
-	@State private var weatherObstacles = WeatherObstacleStore()
-	@State private var meetupMemoryStore = MeetupMemoryStore(
-		container: try! MeetupModelContainer.makeInMemory()
-	)
-	@State private var interestSuggestionStore = InterestSuggestionStore()
-	@State private var presenceMode = PresenceModeStore(state: .available)
-	@State private var friendsOnlyVisibility = FriendsOnlyVisibilityStore()
+	@State private var authSession: AuthSession
+	@State private var locationManager: VisitLocationManager
+	@State private var mapFriendsStore: MapFriendsStore
+	@State private var friendsStore: FriendsStore
+	@State private var locationSharing: LocationSharingService
+	@State private var realtimeClient: RealtimeClient
+	@State private var suggestionEngine: SuggestionEngine
+	@State private var pulsePublisher: PulsePublisher
+	@State private var meetupMemoryStore: MeetupMemoryStore
+	@State private var interestSuggestionStore: InterestSuggestionStore
+	@State private var presenceMode: PresenceModeStore
+	@State private var friendsOnlyVisibility: FriendsOnlyVisibilityStore
+	@State private var pulseInbox: PulseInboxStore
+	@State private var backgroundProximity: BackgroundProximityController
+
+	init() {
+		let authSession = AuthSession.previewSignedIn()
+		let locationManager = VisitLocationManager()
+		let mapFriendsStore = MapFriendsStore()
+		mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
+		let friendsStore = FriendsStore.preview()
+		let locationSharing = LocationSharingService()
+		let presenceMode = PresenceModeStore(state: .available)
+		let friendsOnlyVisibility = FriendsOnlyVisibilityStore()
+
+		_authSession = State(initialValue: authSession)
+		_locationManager = State(initialValue: locationManager)
+		_mapFriendsStore = State(initialValue: mapFriendsStore)
+		_friendsStore = State(initialValue: friendsStore)
+		_locationSharing = State(initialValue: locationSharing)
+		_realtimeClient = State(initialValue: RealtimeClient())
+		_suggestionEngine = State(initialValue: SuggestionEngine())
+		_pulsePublisher = State(initialValue: PulsePublisher())
+		_meetupMemoryStore = State(initialValue: MeetupMemoryStore(
+			container: try! MeetupModelContainer.makeInMemory()
+		))
+		_interestSuggestionStore = State(initialValue: InterestSuggestionStore())
+		_presenceMode = State(initialValue: presenceMode)
+		_friendsOnlyVisibility = State(initialValue: friendsOnlyVisibility)
+		_pulseInbox = State(initialValue: PulseInboxStore())
+		_backgroundProximity = State(initialValue: BackgroundProximityController(
+			locationManager: locationManager,
+			locationSharing: locationSharing,
+			friendsStore: friendsStore,
+			mapFriendsStore: mapFriendsStore,
+			presenceMode: presenceMode,
+			friendsOnlyVisibility: friendsOnlyVisibility
+		))
+	}
 
 	var body: some View {
 		MainTabView()
@@ -473,37 +432,15 @@ private struct MainTabPreviewHost: View {
 			.environment(mapFriendsStore)
 			.environment(friendsStore)
 			.environment(locationSharing)
-			.environment(
-				BackgroundProximityController(
-					locationManager: locationManager,
-					locationSharing: locationSharing,
-					friendsStore: friendsStore,
-					mapFriendsStore: mapFriendsStore,
-					presenceMode: presenceMode,
-					friendsOnlyVisibility: friendsOnlyVisibility
-				)
-			)
+			.environment(backgroundProximity)
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
 			.environment(pulsePublisher)
-			.environment(mapWeather)
-			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
 			.environment(interestSuggestionStore)
 			.environment(presenceMode)
 			.environment(friendsOnlyVisibility)
-			.task {
-				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
-				await suggestionEngine.refresh(
-					userId: "preview",
-					displayName: "You",
-					interests: ["coffee"],
-					coordinate: MockFriendsProvider.fallbackCoordinate,
-					placeName: "Koramangala",
-					people: mapFriendsStore.friends,
-					learned: .empty
-				)
-			}
+			.environment(pulseInbox)
 	}
 }
 #endif

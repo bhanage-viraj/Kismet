@@ -14,8 +14,6 @@ final class AppEnvironment {
 	let suggestionEngine: SuggestionEngine
 	let pulsePublisher: PulsePublisher
 	let pulseInbox: PulseInboxStore
-	let mapWeather: MapWeatherController
-	let weatherObstacles: WeatherObstacleStore
 	let meetupModelContainer: ModelContainer
 	let meetupMemoryStore: MeetupMemoryStore
 	let interestSuggestionStore: InterestSuggestionStore
@@ -35,8 +33,6 @@ final class AppEnvironment {
 		suggestionEngine: SuggestionEngine? = nil,
 		pulsePublisher: PulsePublisher? = nil,
 		pulseInbox: PulseInboxStore? = nil,
-		mapWeather: MapWeatherController? = nil,
-		weatherObstacles: WeatherObstacleStore? = nil,
 		meetupModelContainer: ModelContainer? = nil,
 		presenceMode: PresenceModeStore? = nil,
 		friendsOnlyVisibility: FriendsOnlyVisibilityStore? = nil
@@ -67,8 +63,6 @@ final class AppEnvironment {
 		self.suggestionEngine = suggestionEngine ?? SuggestionEngine()
 		self.pulsePublisher = pulsePublisher ?? PulsePublisher(client: apiClient)
 		self.pulseInbox = pulseInbox ?? PulseInboxStore(client: apiClient)
-		self.mapWeather = mapWeather ?? MapWeatherController()
-		self.weatherObstacles = weatherObstacles ?? WeatherObstacleStore()
 
 		let container: ModelContainer
 		if let meetupModelContainer {

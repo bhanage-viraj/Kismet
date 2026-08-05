@@ -13,7 +13,6 @@ struct MapHomeView: View {
 	@Environment(SuggestionEngine.self) private var suggestionEngine
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
 	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
-	@Environment(MapWeatherController.self) private var mapWeather
 	@Environment(PresenceModeStore.self) private var presenceMode
 	@Environment(FriendsOnlyVisibilityStore.self) private var friendsOnlyVisibility
 	@Environment(PulseInboxStore.self) private var pulseInbox
@@ -52,12 +51,10 @@ struct MapHomeView: View {
 			VStack(spacing: 10) {
 				header
 					.padding(.horizontal, 16)
-					.trackWeatherObstacle("map.header", cornerRadius: KismetTheme.Chrome.headerCornerRadius)
 
 				if locationManager.isDenied, friendsStore.selectedFriend == nil {
 					locationDeniedBanner
 						.padding(.horizontal, 16)
-						.trackWeatherObstacle("map.locationBanner", cornerRadius: 16)
 						.transition(.move(edge: .top).combined(with: .opacity))
 				}
 
@@ -68,7 +65,6 @@ struct MapHomeView: View {
 						onDismiss: { Task { await pulseInbox.acknowledge(pulse) } }
 					)
 					.padding(.horizontal, 16)
-					.trackWeatherObstacle("map.pulseInbox", cornerRadius: 16)
 					.transition(.move(edge: .top).combined(with: .opacity))
 				}
 			}
@@ -106,7 +102,6 @@ struct MapHomeView: View {
 					}
 				)
 				.padding(.horizontal, 18)
-				.trackWeatherObstacle("map.personDetail", cornerRadius: 28)
 				// Clear the floating tab pill; card layout/spacing stays unchanged.
 				.padding(.bottom, 100)
 				.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
@@ -122,7 +117,6 @@ struct MapHomeView: View {
 			guard hasFix, !didCenterOnUser else { return }
 			recenter(on: locationManager.displayCoordinate)
 			Task { await friendsStore.refresh(around: locationManager.displayCoordinate) }
-			Task { await mapWeather.refreshIfNeeded(at: locationManager.displayCoordinate) }
 			publishLocation(force: true)
 			didCenterOnUser = true
 		}
@@ -154,7 +148,6 @@ struct MapHomeView: View {
 					.padding(.horizontal, 14)
 					.padding(.vertical, 10)
 					.background(.ultraThinMaterial, in: Capsule())
-					.trackWeatherObstacle("map.toast", cornerRadius: .infinity)
 					.padding(.top, 72)
 					.transition(.move(edge: .top).combined(with: .opacity))
 			}
@@ -326,7 +319,6 @@ struct MapHomeView: View {
 		guard !Task.isCancelled else { return }
 		recenter(on: locationManager.displayCoordinate)
 		await friendsStore.refresh(around: locationManager.displayCoordinate)
-		await mapWeather.refreshIfNeeded(at: locationManager.displayCoordinate)
 		publishLocation(force: true)
 		await refreshSuggestions()
 	}
@@ -542,8 +534,6 @@ private struct MapHomePreviewHost: View {
 	@State private var locationSharing = LocationSharingService()
 	@State private var realtimeClient = RealtimeClient()
 	@State private var suggestionEngine = SuggestionEngine()
-	@State private var mapWeather = MapWeatherController()
-	@State private var weatherObstacles = WeatherObstacleStore()
 	@State private var meetupMemoryStore = MeetupMemoryStore(
 		container: try! MeetupModelContainer.makeInMemory()
 	)
@@ -571,8 +561,6 @@ private struct MapHomePreviewHost: View {
 			)
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
-			.environment(mapWeather)
-			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
 			.environment(interestSuggestionStore)
 			.environment(presenceMode)
