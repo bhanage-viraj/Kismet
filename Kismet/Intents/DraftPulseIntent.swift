@@ -14,6 +14,7 @@ struct DraftPulseIntent: AppIntent {
 	func perform() async throws -> some IntentResult & ProvidesDialog {
 		let env = AppEnvironment.shared
 		let card: SuggestionCard? = await MainActor.run {
+			env.suggestionEngine.store.rehydrateFromAppGroupIfNeeded()
 			let cards = env.suggestionEngine.store.cards.filter(\.presence.isSuggestionEligible)
 			if let friend {
 				return cards.first { $0.friendID == friend.id }
@@ -26,14 +27,12 @@ struct DraftPulseIntent: AppIntent {
 		}
 
 		let message = await MainActor.run { () -> String in
-			if let existing = card.pulseMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
-			   !existing.isEmpty {
-				return existing
-			}
-			if let venue = card.venueName, !venue.isEmpty {
-				return "Free for \(venue)?"
-			}
-			return "Free to hang soon?"
+			PulseMessageComposer.draft(
+				venue: card.selectedVenue ?? card.venueCandidates?.suggested,
+				hints: card.draftHints,
+				reasonCodes: card.reasonCodes,
+				sharedInterests: card.draftHints?.sharedInterests ?? []
+			)
 		}
 
 		await MainActor.run {
@@ -64,28 +63,40 @@ struct ConfirmPulseIntent: AppIntent {
 
 	func perform() async throws -> some IntentResult & ProvidesDialog {
 		let env = AppEnvironment.shared
-		let draft = await MainActor.run { env.pendingPulseDraft }
 
+		let draft = await MainActor.run { env.resolvedPendingPulseDraft() }
 		guard let draft else {
 			return .result(dialog: "No Pulse draft waiting. Try Draft a Pulse first.")
 		}
 
 		let card: SuggestionCard? = await MainActor.run {
+			env.suggestionEngine.store.rehydrateFromAppGroupIfNeeded()
 			let cards = env.suggestionEngine.store.cards.filter(\.presence.isSuggestionEligible)
 			if let match = cards.first(where: { $0.friendID == draft.friendID }) {
-				return match
+				var hydrated = match
+				if hydrated.pulseMessage?.isEmpty != false {
+					hydrated.pulseMessage = draft.message
+				}
+				if hydrated.venueName == nil {
+					hydrated.venueName = draft.venueName
+				}
+				return hydrated
 			}
-			// Reconstruct a minimal eligible card from the draft when store was cleared.
-			return nil
+
+			// Reconstruct from draft (+ snapshot card when available) after cold start.
+			let snapshotCard = AppGroup.loadSnapshot()?.cards.first {
+				$0.friendID == draft.friendID || $0.id == draft.suggestionCardID
+			}
+			return SuggestionCard.fromPulseDraft(draft, snapshotCard: snapshotCard)
 		}
 
 		guard let card else {
-			await MainActor.run { env.pendingPulseDraft = nil }
+			await MainActor.run { env.clearPendingPulseDraft() }
 			return .result(dialog: "That friend isn't available for a Pulse right now.")
 		}
 
 		guard card.presence.isSuggestionEligible else {
-			await MainActor.run { env.pendingPulseDraft = nil }
+			await MainActor.run { env.clearPendingPulseDraft() }
 			return .result(dialog: "That friend is hidden or unavailable.")
 		}
 
@@ -108,7 +119,7 @@ struct ConfirmPulseIntent: AppIntent {
 					source: .pulse,
 					outcome: .pending
 				)
-				env.pendingPulseDraft = nil
+				env.clearPendingPulseDraft()
 			}
 			return .result(dialog: "Pulse sent to \(draft.displayName).")
 		} catch {

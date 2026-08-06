@@ -360,10 +360,13 @@ struct MapHomeView: View {
 	@MainActor
 	private func notifySenderOfMeetupAccept(_ pulse: IncomingPulse) async {
 		guard let myId = authSession.user?.id ?? KeychainStore.get(.userId) else { return }
+		let pin = MeetupPayloadDTO.venuePin(from: pulse.payload)
 		let payload = MeetupPayloadDTO(
 			meetupId: pulse.payload.pulseId,
 			title: pulse.payload.label,
-			venueName: pulse.payload.venueName,
+			venueName: pin.name,
+			venueLatitude: pin.latitude,
+			venueLongitude: pin.longitude,
 			meetAt: pulse.payload.expiresAt,
 			peerDisplayName: authSession.preferredDisplayName,
 			systemImage: "figure.walk",
@@ -404,7 +407,8 @@ struct MapHomeView: View {
 				venueName: venueName,
 				systemImage: "figure.walk",
 				participants: participants,
-				venueCoordinate: nil,
+				// MapKit venue pin from Pulse payload — not the accepter's live GPS.
+				venueCoordinate: pulse.payload.venueCoordinate,
 				meetAt: pulse.payload.expiresAt,
 				currentLocation: locationManager.userLocation
 			)
@@ -445,7 +449,8 @@ struct MapHomeView: View {
 				venueName: venueName,
 				systemImage: payload.systemImage,
 				participants: participants,
-				venueCoordinate: nil,
+				// MapKit venue pin from MEETUP payload — not live GPS.
+				venueCoordinate: payload.venueCoordinate,
 				meetAt: payload.meetAt,
 				currentLocation: locationManager.userLocation
 			)

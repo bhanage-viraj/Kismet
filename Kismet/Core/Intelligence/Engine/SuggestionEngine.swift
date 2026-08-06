@@ -10,15 +10,18 @@ final class SuggestionEngine {
 	let store: SuggestionStore
 	private let gateway: FoundationModelsGateway
 	private let ranker: OpportunityRanker
+	private let venueResolver: VenueResolver
 
 	init(
 		store: SuggestionStore? = nil,
 		gateway: FoundationModelsGateway? = nil,
-		ranker: OpportunityRanker = OpportunityRanker()
+		ranker: OpportunityRanker = OpportunityRanker(),
+		venueResolver: VenueResolver = VenueResolver()
 	) {
 		self.store = store ?? SuggestionStore()
 		self.gateway = gateway ?? FoundationModelsGateway()
 		self.ranker = ranker
+		self.venueResolver = venueResolver
 	}
 
 	func refresh(
@@ -58,13 +61,23 @@ final class SuggestionEngine {
 			return
 		}
 
+		let venueStates = await VenueGrounding.resolveStates(
+			for: ranked,
+			origin: coordinate,
+			resolver: venueResolver
+		)
+
 		if gateway.isAvailable {
 			do {
-				let bundle = try await gateway.generateSuggestions(context: context, ranked: ranked)
-				let cards = merge(bundle: bundle, ranked: ranked)
+				let bundle = try await gateway.generateSuggestions(
+					context: context,
+					ranked: ranked,
+					venueStates: venueStates
+				)
+				let cards = merge(bundle: bundle, ranked: ranked, venueStates: venueStates, context: context)
 				if cards.isEmpty {
 					store.replace(
-						cards: FallbackComposer.cards(from: ranked),
+						cards: FallbackComposer.cards(from: ranked, venueStates: venueStates, context: context),
 						usedModel: false,
 						status: gateway.availabilityMessage(),
 						userCoordinate: coordinate
@@ -76,7 +89,7 @@ final class SuggestionEngine {
 				return
 			} catch {
 				store.replace(
-					cards: FallbackComposer.cards(from: ranked),
+					cards: FallbackComposer.cards(from: ranked, venueStates: venueStates, context: context),
 					usedModel: false,
 					status: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
 					userCoordinate: coordinate
@@ -86,7 +99,7 @@ final class SuggestionEngine {
 		}
 
 		store.replace(
-			cards: FallbackComposer.cards(from: ranked),
+			cards: FallbackComposer.cards(from: ranked, venueStates: venueStates, context: context),
 			usedModel: false,
 			status: gateway.availabilityMessage(),
 			userCoordinate: coordinate
@@ -106,14 +119,25 @@ final class SuggestionEngine {
 		)
 	}
 
-	private func merge(bundle: PulseSuggestionBundle, ranked: [RankedOpportunity]) -> [SuggestionCard] {
+	private func merge(
+		bundle: PulseSuggestionBundle,
+		ranked: [RankedOpportunity],
+		venueStates: [String: VenueResolutionState],
+		context: KismetContext
+	) -> [SuggestionCard] {
 		let byID = Dictionary(uniqueKeysWithValues: ranked.map { ($0.friend.id, $0) })
 		return bundle.suggestions.compactMap { suggestion in
 			guard let rankedItem = byID[suggestion.friendID] else { return nil }
 			let friend = rankedItem.friend
 			guard friend.presence.isSuggestionEligible else { return nil }
 
-			let chips = FallbackComposer.factChips(for: rankedItem)
+			let venue = VenueGrounding.mergeVenue(
+				resolverState: venueStates[friend.id],
+				modelVenueName: suggestion.venueName,
+				modelVenueETAMinutes: suggestion.venueETAMinutes
+			)
+
+			var chips = FallbackComposer.factChips(for: rankedItem, venue: venue)
 			var reason = suggestion.reason.trimmingCharacters(in: .whitespacesAndNewlines)
 			if reason.isEmpty {
 				reason = chips.joined(separator: " · ")
@@ -137,6 +161,8 @@ final class SuggestionEngine {
 				}
 			}()
 
+			let hints = PulseDraftHints.make(item: rankedItem, context: context)
+
 			return SuggestionCard(
 				id: suggestion.friendID,
 				friendID: suggestion.friendID,
@@ -150,15 +176,24 @@ final class SuggestionEngine {
 				factChips: chips,
 				ctaTitle: ctaTitle,
 				ctaSystemImage: suggestion.action == .pingWhenFree ? "hourglass" : "wave.3.right",
-				venueName: suggestion.venueName,
-				venueETAMinutes: suggestion.venueETAMinutes,
+				venueName: venue.venueName,
+				venueETAMinutes: venue.venueETAMinutes,
 				confidence: suggestion.confidence,
 				urgency: urgency,
 				isModelGenerated: true,
-				pulseMessage: {
-					let trimmed = suggestion.pulseMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
-					return (trimmed?.isEmpty == false) ? trimmed : nil
-				}()
+				pulseMessage: PulseMessageComposer.draft(
+					venue: venue.selectedVenue,
+					hints: hints
+				),
+				venueCandidates: {
+					if case .resolved(let c) = venue.resolution { return c }
+					return nil
+				}(),
+				selectedVenue: venue.selectedVenue,
+				venueResolution: venue.resolution,
+				venueCoordinate: venue.venueCoordinate,
+				venueDisplayETALabel: venue.displayETALabel,
+				draftHints: hints
 			)
 		}
 	}

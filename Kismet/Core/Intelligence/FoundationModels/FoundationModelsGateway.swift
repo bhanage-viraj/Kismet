@@ -47,7 +47,8 @@ final class FoundationModelsGateway {
 
 	func generateSuggestions(
 		context: KismetContext,
-		ranked: [RankedOpportunity]
+		ranked: [RankedOpportunity],
+		venueStates: [String: VenueResolutionState] = [:]
 	) async throws -> PulseSuggestionBundle {
 		guard case .available = SystemLanguageModel.default.availability else {
 			let message = availabilityMessage() ?? "Model unavailable"
@@ -56,10 +57,16 @@ final class FoundationModelsGateway {
 		}
 		lastUnavailableReason = nil
 
+		// `#if compiler` only wraps APIs that need a newer SDK.
+		// Runtime `#available(iOS 27, *)` is what decides the path on-device.
 		#if compiler(>=6.4)
 		if #available(iOS 27.0, *) {
 			do {
-				return try await SuggestionAgentRunner.generate(context: context, ranked: ranked)
+				return try await SuggestionAgentRunner.generate(
+					context: context,
+					ranked: ranked,
+					venueStates: venueStates
+				)
 			} catch {
 				#if DEBUG
 				print("Suggestion agent failed, falling back: \(error.localizedDescription)")
@@ -68,26 +75,26 @@ final class FoundationModelsGateway {
 		}
 		#endif
 
-		return try await generateLegacy(context: context, ranked: ranked)
+		return try await generateLegacy(context: context, ranked: ranked, venueStates: venueStates)
 	}
 
 	private func generateLegacy(
 		context: KismetContext,
-		ranked: [RankedOpportunity]
+		ranked: [RankedOpportunity],
+		venueStates: [String: VenueResolutionState]
 	) async throws -> PulseSuggestionBundle {
 		let tool = FindNearbyVenueTool(coordinate: context.user.coordinate)
 		let session = LanguageModelSession(tools: [tool]) {
 			Instructions {
 				PromptBuilder.instructions + """
 
-				Also draft a short pulseMessage (1 sentence) the user could send — friendly, \
-				specific, no invented facts. Leave pulseMessage empty only when action is none.
+				Leave pulseMessage and venueName empty — the app drafts the Pulse body from the selected venue.
 				"""
 			}
 		}
 		session.prewarm()
 
-		let prompt = PromptBuilder.prompt(context: context, ranked: ranked)
+		let prompt = PromptBuilder.prompt(context: context, ranked: ranked, venueStates: venueStates)
 		do {
 			let response = try await session.respond(
 				to: prompt,

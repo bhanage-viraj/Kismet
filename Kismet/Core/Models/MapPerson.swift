@@ -20,6 +20,10 @@ struct MapPerson: Identifiable, Hashable, Sendable {
 	var presenceState: PresenceState
 	var distanceMeters: CLLocationDistance
 	var sharedInterests: [String]
+	/// Last-known free window from map availability sync (may be stale until next refresh).
+	var freeUntil: Date? = nil
+	/// Last-known next free time when currently busy (may be stale until next refresh).
+	var freeFrom: Date? = nil
 	var insightSummary: String
 	var intentLabel: String
 	var neighborhoodLabel: String

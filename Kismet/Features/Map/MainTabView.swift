@@ -76,6 +76,7 @@ struct MainTabView: View {
 	@State private var dragOffset: CGFloat = 0
 	@State private var ctaToast: String?
 	@State private var recordedShownCardIDs: Set<String> = []
+	@State private var pulseComposeCard: SuggestionCard?
 	@Namespace private var glassNamespace
 
 	/// Insights card floats above the native tab bar (Map only, no person detail).
@@ -136,6 +137,17 @@ struct MainTabView: View {
 		.animation(.snappy, value: showsInsights)
 		.animation(.snappy, value: insightsDetent)
 		.ignoresSafeArea(.keyboard)
+		.sheet(item: $pulseComposeCard) { card in
+			PulseComposeSheet(
+				card: card,
+				onSend: { outgoing in
+					Task { await sendPulse(for: outgoing) }
+				},
+				onCancel: {
+					pulseComposeCard = nil
+				}
+			)
+		}
 	}
 
 	private var mapTabRoot: some View {
@@ -177,7 +189,7 @@ struct MainTabView: View {
 						friendsStore.select(card.friendID)
 					},
 					onCTA: { card in
-						Task { await sendPulse(for: card) }
+						presentPulseCompose(for: card)
 					},
 					onDismiss: { card in
 						recordFeedback(card, action: .dismissed)
@@ -314,6 +326,16 @@ struct MainTabView: View {
 	}
 
 	@MainActor
+	private func presentPulseCompose(for card: SuggestionCard) {
+		// Optional picker: only when MapKit candidates exist. Otherwise send with defaults.
+		if card.venueCandidates != nil {
+			pulseComposeCard = card
+		} else {
+			Task { await sendPulse(for: card) }
+		}
+	}
+
+	@MainActor
 	private func sendPulse(for card: SuggestionCard) async {
 		do {
 			let pulse = try await pulsePublisher.send(
@@ -331,6 +353,7 @@ struct MainTabView: View {
 			)
 			let venue = card.venueName.map { " · \($0)" } ?? ""
 			showToast("Pulse sent to \(card.displayName)\(venue)")
+			pulseComposeCard = nil
 			_ = pulse
 		} catch {
 			showToast((error as? LocalizedError)?.errorDescription ?? "Couldn't send Pulse")

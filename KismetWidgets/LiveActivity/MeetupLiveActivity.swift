@@ -56,11 +56,12 @@ struct MeetupLiveActivity: Widget {
 						.foregroundStyle(PresenceStatusColor.free)
 						.widgetAccentable()
 				} else {
-					Text(context.state.etaText)
+					Text(compactTrailingLabel(attributes: context.attributes, state: context.state))
 						.font(.caption.weight(.semibold))
 						.foregroundStyle(PresenceStatusColor.free)
 						.widgetAccentable()
-						.minimumScaleFactor(0.7)
+						.lineLimit(1)
+						.minimumScaleFactor(0.65)
 				}
 			} minimal: {
 				if context.state.isEnded {
@@ -75,6 +76,19 @@ struct MeetupLiveActivity: Widget {
 			.keylineTint(PresenceStatusColor.free)
 			.widgetURL(WidgetDeepLink.meetup)
 		}
+	}
+
+	/// Prefer a short venue name on the Island compact trailing; fall back to ETA.
+	private func compactTrailingLabel(
+		attributes: MeetupActivityAttributes,
+		state: MeetupActivityAttributes.ContentState
+	) -> String {
+		let venue = attributes.venueName.trimmingCharacters(in: .whitespacesAndNewlines)
+		if !venue.isEmpty, venue != attributes.title {
+			if venue.count <= 12 { return venue }
+			return String(venue.prefix(11)) + "…"
+		}
+		return state.etaText
 	}
 
 	@ViewBuilder

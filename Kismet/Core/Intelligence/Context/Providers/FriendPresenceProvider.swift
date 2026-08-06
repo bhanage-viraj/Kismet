@@ -3,17 +3,9 @@ import Foundation
 
 struct FriendPresenceProvider: ContextProviding {
 	private let people: [MapPerson]
-	private let freeUntilByID: [String: Date]
-	private let freeFromByID: [String: Date]
 
-	init(
-		people: [MapPerson],
-		freeUntilByID: [String: Date] = [:],
-		freeFromByID: [String: Date] = [:]
-	) {
+	init(people: [MapPerson]) {
 		self.people = people
-		self.freeUntilByID = freeUntilByID
-		self.freeFromByID = freeFromByID
 	}
 
 	func current() async -> [FriendPresence] {
@@ -27,8 +19,8 @@ struct FriendPresenceProvider: ContextProviding {
 				presence: presence,
 				distanceMeters: person.distanceMeters,
 				sharedInterests: person.sharedInterests,
-				freeUntil: freeUntilByID[person.id],
-				freeFrom: freeFromByID[person.id],
+				freeUntil: person.freeUntil,
+				freeFrom: person.freeFrom,
 				lastSeenAt: nil,
 				locationAccuracy: nil
 			)

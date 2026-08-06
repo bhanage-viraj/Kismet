@@ -58,6 +58,7 @@ struct KismetContext: Sendable {
 	var calendar: CalendarSlice
 	var motion: MotionSlice
 	var focus: FocusSlice
+	var weather: WeatherSlice
 	var learned: LearnedSlice
 
 	/// Friends eligible for Suggestions / Siri (never Eclipse).

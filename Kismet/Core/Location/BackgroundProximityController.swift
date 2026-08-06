@@ -226,7 +226,8 @@ final class BackgroundProximityController {
 				venueName: venueName,
 				systemImage: payload.systemImage,
 				participants: participants,
-				venueCoordinate: nil,
+				// MapKit venue pin from MEETUP payload — not live GPS.
+				venueCoordinate: payload.venueCoordinate,
 				meetAt: payload.meetAt,
 				currentLocation: locationManager.userLocation
 			)

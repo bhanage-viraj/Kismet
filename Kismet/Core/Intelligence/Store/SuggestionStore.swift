@@ -32,6 +32,27 @@ final class SuggestionStore {
 		)
 	}
 
+	/// Load last App Group snapshot into memory when Siri/intents run with a cold store.
+	@discardableResult
+	func rehydrateFromAppGroupIfNeeded() -> Bool {
+		guard cards.isEmpty else { return false }
+		guard let snapshot = AppGroup.loadSnapshot(),
+		      !snapshot.isStale,
+		      !snapshot.cards.isEmpty
+		else { return false }
+
+		let restored = snapshot.cards
+			.map(SuggestionCard.fromAppGroup)
+			.filter(\.presence.isSuggestionEligible)
+		guard !restored.isEmpty else { return false }
+
+		cards = restored
+		lastUpdatedAt = snapshot.updatedAt
+		statusMessage = nil
+		usedFoundationModels = false
+		return true
+	}
+
 	func reset() {
 		cards = []
 		lastUpdatedAt = nil

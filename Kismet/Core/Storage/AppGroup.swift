@@ -6,6 +6,7 @@ enum AppGroup {
 	static let suggestionSnapshotKey = "suggestionSnapshot"
 	static let openPulseKey = "openPulseSnapshot"
 	static let pendingAcceptPulseBlobIdKey = "pendingAcceptPulseBlobId"
+	static let pendingPulseDraftKey = "pendingPulseDraft"
 	static let widgetKind = "FriendAvailabilityWidget"
 	static let meetupWidgetKind = "SuggestedMeetupWidget"
 	static let mapWidgetKind = "FriendsMapLargeWidget"
@@ -70,6 +71,12 @@ enum AppGroup {
 		var avatarFileName: String? = nil
 		var latitude: Double? = nil
 		var longitude: Double? = nil
+		/// Warm-store fields for Siri rehydrate (optional for older snapshots).
+		var presenceRaw: String? = nil
+		var availabilityRaw: String? = nil
+		var distanceMeters: Double? = nil
+		var ctaSystemImage: String? = nil
+		var pulseMessage: String? = nil
 	}
 
 	struct SuggestionSnapshot: Codable, Sendable, Equatable {
@@ -145,6 +152,21 @@ enum AppGroup {
 				defaults?.removeObject(forKey: pendingAcceptPulseBlobIdKey)
 			}
 		}
+	}
+
+	static func savePendingPulseDraft(_ draft: PulseDraft?) {
+		guard let defaults else { return }
+		guard let draft else {
+			defaults.removeObject(forKey: pendingPulseDraftKey)
+			return
+		}
+		guard let data = try? JSONEncoder().encode(draft) else { return }
+		defaults.set(data, forKey: pendingPulseDraftKey)
+	}
+
+	static func loadPendingPulseDraft() -> PulseDraft? {
+		guard let data = defaults?.data(forKey: pendingPulseDraftKey) else { return nil }
+		return try? JSONDecoder().decode(PulseDraft.self, from: data)
 	}
 
 	/// Preview hosts and MockFriendsProvider use `preview-` / `mock-` IDs.

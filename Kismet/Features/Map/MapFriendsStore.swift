@@ -164,6 +164,8 @@ final class MapFriendsStore {
 			presenceState: presence,
 			distanceMeters: distance,
 			sharedInterests: interestsList,
+			freeUntil: friend.availability.freeUntil,
+			freeFrom: friend.availability.freeFrom,
 			insightSummary: insightSummary(
 				presence: presence,
 				availability: friend.availability,

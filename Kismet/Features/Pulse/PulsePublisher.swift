@@ -50,12 +50,30 @@ final class PulsePublisher {
 		}
 
 		let expiresAt = Date().addingTimeInterval(45 * 60)
+		// Venue lat/lon are the MapKit place pin from VenueResolver / selectedVenue — never live GPS.
+		let venue = PulseVenueFields.fromSuggestion(suggestion)
+		let draftMessage: String? = {
+			if let message = suggestion.pulseMessage?.trimmingCharacters(in: .whitespacesAndNewlines),
+			   !message.isEmpty {
+				return message
+			}
+			if let draft = AppEnvironment.shared.pendingPulseDraft,
+			   draft.friendID == suggestion.friendID {
+				let trimmed = draft.message.trimmingCharacters(in: .whitespacesAndNewlines)
+				return trimmed.isEmpty ? nil : trimmed
+			}
+			return nil
+		}()
+
 		let payload = PulsePayloadDTO(
 			pulseId: UUID().uuidString,
 			emoji: "👋",
 			label: suggestion.ctaTitle,
 			expiresAt: expiresAt,
-			venueName: suggestion.venueName,
+			venueName: venue.name,
+			venueLatitude: venue.latitude,
+			venueLongitude: venue.longitude,
+			message: draftMessage,
 			createdAt: Date()
 		)
 

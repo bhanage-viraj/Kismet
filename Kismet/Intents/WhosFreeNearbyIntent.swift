@@ -8,8 +8,9 @@ struct WhosFreeNearbyIntent: AppIntent {
 
 	func perform() async throws -> some IntentResult & ProvidesDialog {
 		let cards = await MainActor.run {
-			AppEnvironment.shared.suggestionEngine.store.cards
-				.filter { $0.presence == .available || $0.presence == .approximate }
+			let store = AppEnvironment.shared.suggestionEngine.store
+			store.rehydrateFromAppGroupIfNeeded()
+			return store.cards.filter { $0.presence == .available || $0.presence == .approximate }
 		}
 
 		guard !cards.isEmpty else {
@@ -34,8 +35,9 @@ struct WhosNearbyIntent: AppIntent {
 
 	func perform() async throws -> some IntentResult & ProvidesDialog {
 		let cards = await MainActor.run {
-			AppEnvironment.shared.suggestionEngine.store.cards
-				.filter(\.presence.isSuggestionEligible)
+			let store = AppEnvironment.shared.suggestionEngine.store
+			store.rehydrateFromAppGroupIfNeeded()
+			return store.cards.filter(\.presence.isSuggestionEligible)
 		}
 		guard !cards.isEmpty else {
 			return .result(dialog: "No friends nearby right now.")
@@ -56,6 +58,7 @@ struct StartPulseIntent: AppIntent {
 	func perform() async throws -> some IntentResult & ProvidesDialog {
 		let env = AppEnvironment.shared
 		let card: SuggestionCard? = await MainActor.run {
+			env.suggestionEngine.store.rehydrateFromAppGroupIfNeeded()
 			let cards = env.suggestionEngine.store.cards.filter(\.presence.isSuggestionEligible)
 			if let friend {
 				return cards.first { $0.friendID == friend.id }
@@ -86,7 +89,7 @@ struct StartPulseIntent: AppIntent {
 					source: .pulse,
 					outcome: .pending
 				)
-				env.pendingPulseDraft = nil
+				env.clearPendingPulseDraft()
 			}
 			return .result(dialog: "Pulse sent to \(card.displayName).")
 		} catch {
