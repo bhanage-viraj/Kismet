@@ -7,6 +7,7 @@ struct MoreView: View {
 	@Environment(LocationSharingService.self) private var locationSharing
 	@Environment(BackgroundProximityController.self) private var backgroundProximity
 	@Environment(RealtimeClient.self) private var realtimeClient
+	@State private var showAboutDevelopers = false
 	var embedded: Bool = false
 
 	var body: some View {
@@ -19,6 +20,11 @@ struct MoreView: View {
 						.navigationTitle("More")
 				}
 			}
+		}
+		.sheet(isPresented: $showAboutDevelopers) {
+			AboutDeveloperView()
+				.presentationDetents([.height(480)])
+				.presentationDragIndicator(.visible)
 		}
 	}
 
@@ -66,6 +72,15 @@ struct MoreView: View {
 						await authSession.signOut()
 					}
 				}
+			}
+
+			Section("About") {
+				Button {
+					showAboutDevelopers = true
+				} label: {
+					Label("About the developers", systemImage: "chevron.left.forwardslash.chevron.right")
+				}
+				.foregroundStyle(.primary)
 			}
 		}
 		.scrollContentBackground(embedded ? .hidden : .automatic)

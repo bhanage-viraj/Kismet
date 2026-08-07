@@ -14,7 +14,7 @@
 	<true/>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.bhanageviraj.indeKismet</string>
+		<string>group.sanjivanand.kismet</string>
 	</array>
 </dict>
 </plist>
