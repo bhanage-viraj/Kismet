@@ -37,6 +37,7 @@ private struct RootPreviewHost: View {
 	@State private var suggestionEngine = SuggestionEngine()
 	@State private var pulsePublisher = PulsePublisher()
 	@State private var presenceMode = PresenceModeStore(state: .available)
+	@State private var friendsOnlyVisibility = FriendsOnlyVisibilityStore()
 
 	var body: some View {
 		RootView()
@@ -51,13 +52,15 @@ private struct RootPreviewHost: View {
 					locationSharing: locationSharing,
 					friendsStore: friendsStore,
 					mapFriendsStore: mapFriendsStore,
-					presenceMode: presenceMode
+					presenceMode: presenceMode,
+					friendsOnlyVisibility: friendsOnlyVisibility
 				)
 			)
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
 			.environment(pulsePublisher)
 			.environment(presenceMode)
+			.environment(friendsOnlyVisibility)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 			}

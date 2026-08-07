@@ -1,15 +1,9 @@
 import Foundation
 
-/// Focus filters (SetFocusFilterIntent) can later flip `blocksSocial`.
-/// Default is permissive so the demo loop isn't blocked without a Focus filter installed.
+/// Reads the Focus filter App Group flag set by `KismetFocusFilterIntent`.
 struct FocusContextProvider: ContextProviding {
-	private let blocksSocial: Bool
-
-	init(blocksSocial: Bool = false) {
-		self.blocksSocial = blocksSocial
-	}
-
 	func current() async -> FocusSlice {
-		FocusSlice(blocksSocial: blocksSocial, label: blocksSocial ? "Focus" : nil)
+		let blocks = FocusSocialGate.blocksSocial
+		return FocusSlice(blocksSocial: blocks, label: blocks ? FocusSocialGate.label : nil)
 	}
 }

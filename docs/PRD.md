@@ -17,24 +17,24 @@ People we care about most are often nearby, but we only realize it after the cha
 
 | Tier | Feature | Status | Notes |
 |---|---|---|---|
-| **P0** | Onboarding + Sign in with Apple | — | Custom auth via Spring backend, not iCloud-account-as-identity. |
+| **P0** | Onboarding + Sign in with Apple | **Done** | Custom auth via Spring backend, not iCloud-account-as-identity. Plaintext `appleSub` still stored (see gaps). |
 | **P0** | **Orbit Bump** — in-person friend discovery, one-tap mutual consent | **Done** | Hero friend-add path; Multipeer + UWB + server bump pair. |
-| **P0** | **Presence States** — Available / Friends Only / Approximate / Eclipse (hidden) | **Done (client E2EE)** | Map picker; sealed `mode` on LOCATION; Approximate fuzz; Eclipse hide for friends; schedule FREE/BUSY is calendar fallback only. |
-| **P0** | Friend list + "who's nearby and available" view | — | Minimum viable coordination loop. |
+| **P0** | **Presence States** — Available / Friends Only / Approximate / Eclipse (hidden) | **Done (client E2EE)** | Map picker; sealed `mode` on LOCATION; Approximate fuzz; Eclipse hide; Friends Only subset allowlist (precise to chosen friends). Schedule FREE/BUSY is calendar fallback only. |
+| **P0** | Friend list + "who's nearby and available" view | **Done (demo) / Partial (durable)** | Map + E2EE LOCATION; Always + APNs needed for locked-phone durability. |
 | **P1** | Invite codes / QR — fallback friend-add for people not physically together | **Done** | Replaces username search. Secondary path; Bump is the hero flow. Same Spring pairing + TOFU public-key exchange. |
 | **P1** | Username search | **Cut** | Not shipping — use invite codes instead. |
-| **P1** | **Intelligence Layer** — Foundation Models reasoning over calendar, Focus, time, location, motion, interests, meetup history → proactive suggestions | In progress — see linked engineering design | Ranking-then-model architecture; grounded, `@Generable` structured output only. Full technical design: `Kismet Apple Intelligence Engine — Technical Design`. |
-| **P1** | **Shared Interests** — onboarding picks, opt-in sync | — | Feeds Intelligence Layer ranking and Pulse targeting. |
-| **P1** | **Pulse** — lightweight, auto-expiring invitation, shown only to relevant friends by presence/availability/interest | Elevated to first-class (was suggestion-copy-only) | Needs a real publish/expire/visibility path, not just a CTA string — this is now required, not stretch. |
-| **P1** | Widgets (static) — "Bala is nearby, free until 4:15 PM" | Elevated from stretch to P1 | Primary surface outside the app itself; backed by a shared App Group cache, not live model calls. |
-| **P1** | Siri + App Intents — "Who's free nearby?", "Anyone up for coffee?" | Baseline via AppIntentsProvider works on current OS; richer Siri AI schema matching is iOS 27-gated | Ship the 26.4-compatible baseline first; layer entity schemas if demo devices are on iOS 27. |
-| **P2** | **Shared Live Activities** — starts once a meetup is accepted; Dynamic Island, live ETA, arrival notification, auto-ends | Deferred | Cuttable without breaking the core story. |
-| **P2** | Interactive widgets (accept a Pulse directly from the widget) | Deferred | Polish on top of P1 static widgets. |
-| **P2** | MapKit spot suggestions inside Intelligence Layer output | Pulled forward as a Tool the model can call | Grounds venue suggestions in real MapKit results rather than model-invented places — strong demo value for modest cost. |
+| **P1** | **Intelligence Layer** — Foundation Models reasoning over calendar, Focus, time, location, motion, interests, meetup history → proactive suggestions | **Near done** | Ranking-then-model + Focus gate; iOS 27 Dynamic Profiles still toolchain-gated. Full design: `Kismet Apple Intelligence Engine — Technical Design`. |
+| **P1** | **Shared Interests** — onboarding picks, opt-in sync | **Mostly done** | Onboarding + Profile + E2EE `INTEREST_MATCH`; server still keeps plaintext interests for fallback. |
+| **P1** | **Pulse** — lightweight, auto-expiring invitation, shown only to relevant friends by presence/availability/interest | **Done (two-sided)** | Publish / inbox / expire / ack / map banner / widget Accept / Live Activity on accept; send gated by presence + interest. |
+| **P1** | Widgets (static) — "Bala is nearby, free until 4:15 PM" | **Done** | App Group snapshot cache; availability + map + meetup surfaces. |
+| **P1** | Siri + App Intents — "Who's free nearby?", "Anyone up for coffee?" | **Done (baseline)** | 26.4-compatible baseline shipped; richer Siri AI schemas remain iOS 27-gated. |
+| **P2** | **Shared Live Activities** — starts once a meetup is accepted; Dynamic Island, live ETA, arrival notification, auto-ends | **Done (shared)** | Dual-start via sealed `MEETUP` blob; ActivityKit push tokens; peer ContentState via APNs (`APNS_*` for remote ETA). |
+| **P2** | Interactive widgets (accept a Pulse directly from the widget) | **Done** | Medium widget Accept Pulse via App Intent + App Group handoff. |
+| **P2** | MapKit spot suggestions inside Intelligence Layer output | **Done** | `FindNearbyVenueTool` grounds venue suggestions in MapKit. |
 
 **Removed entirely:** Moments, Stories, Likes, Comments, Feeds, any content/engagement mechanics, and **username search** (invite codes are the remote friend-add path). Orbit's strength is coordination, not content.
 
-Recommendation: build strictly top-down. Don't start P1 Intelligence Layer work until Orbit Bump + Presence States + friend list run live on two physical devices — the Intelligence Layer has nothing real to reason over without them.
+Recommendation: core P0 + first-class P1 (Pulse, widgets, Intelligence baseline) are on `main`. Remaining risk is **ops and rehearsal**, not missing features — see [`docs/PRD_GAPS.md`](./PRD_GAPS.md).
 
 ## 4. System Architecture — Spring backend, end-to-end encrypted relay
 
@@ -79,7 +79,7 @@ status: "pending" | "accepted", createdAt
 **EncryptedBlob** (the only "content" record — opaque to the server)
 ```
 id, senderId, recipientId, ciphertext,
-kind: "presence" | "pulse" | "interestMatch" | "meetupInvite",
+kind: "presence" | "pulse" | "interestMatch" | "meetupInvite" | "meetup",
 createdAt (short TTL, deleted on confirmed delivery)
 ```
 
@@ -115,11 +115,12 @@ Foundation Models reasoning is **proactive suggestion ranking with grounded fact
 - **Key management on reinstall** — losing/reinstalling means re-pairing with friends unless private keys are backed up via iCloud Keychain; likely fine for a hackathon demo, worth stating explicitly rather than assuming.
 - **Invite-code trust model** — weaker than Bump's in-person key exchange (server briefly introduces the two public keys); same TOFU class as the old username-search idea; optional fingerprint/verification code remains a stretch hardening item.
 - **App Intents / Spotlight boundaries** — be explicit about what Orbit contributes to the system-wide semantic index; an Eclipse-hidden friend's presence should never surface via Siri/Spotlight even indirectly.
-- 2–3 people, ~2 weeks — if behind schedule, cut order is: Shared Live Activities → interactive widgets → MapKit tool grounding.
+- **Silent wake / Always location** — code is present; deploy APNs credentials and grant Always on demo phones or durable “who's nearby” degrades when apps are suspended.
+- Cut order if still behind on polish: `appleSub` hashing → drop plaintext interests.
 
 ## 9. Next Steps
 1. Keep [`docs/PRD.md`](./PRD.md) + [`docs/PRD_GAPS.md`](./PRD_GAPS.md) as the living status source of truth.
-2. Elevate Pulse to a real publish/expire/visibility path with an inbox (wired to Intelligence CTAs).
-3. Focus integration so the Intelligence Layer respects DND-like states.
-4. Ops: APNs secrets on deploy for silent proximity wake.
-5. Buffer + full two-device demo rehearsal (Bump → presence → Intelligence → Pulse → widget → Siri).    
+2. Ops: APNs secrets on deploy for silent proximity wake (`APNS_*` — see `server/.env.example`).
+3. Confirm Always location on both demo devices; rehearse locked-phone nearby.
+4. Full two-device demo rehearsal (Bump → presence → Intelligence → Pulse → widget → Siri).
+5. Optional polish only: hash `appleSub`; drop plaintext interests once INTEREST_MATCH is universal.

@@ -98,7 +98,17 @@ final class MapFriendsStore {
 			)
 
 			var locationsBySender: [String: (payload: LocationPayloadDTO, updatedAt: Date)] = [:]
+			var sealedInterestsBySender: [String: [String]] = [:]
+			var myInterestSet: Set<String> = []
 			if let myUserId {
+				let interestMatcher = InterestMatchSharingService(client: client, crypto: crypto)
+				async let sealed = interestMatcher.loadFriendInterests(friends: friendSummaries)
+				async let meResponse: MeResponseDTO = client.get("/me")
+				sealedInterestsBySender = await sealed
+				if let me = try? await meResponse {
+					myInterestSet = Set(me.interests.map { $0.lowercased() })
+				}
+
 				for blob in pending where blob.kind.uppercased() == "LOCATION" {
 					guard generation == refreshGeneration, !Task.isCancelled else { return }
 					guard let senderKey = publicKeys[blob.senderUserId] else { continue }
@@ -125,11 +135,16 @@ final class MapFriendsStore {
 			let originLocation = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
 			let mapped: [MapPerson] = mapFriends.compactMap { friend in
 				guard let location = locationsBySender[friend.userId] else { return nil }
+				let e2eeShared: [String]? = {
+					guard let theirs = sealedInterestsBySender[friend.userId] else { return nil }
+					return Array(myInterestSet.intersection(Set(theirs.map { $0.lowercased() }))).sorted()
+				}()
 				return Self.makePerson(
 					from: friend,
 					payload: location.payload,
 					blobUpdatedAt: friend.blobUpdatedAt ?? location.updatedAt,
-					origin: originLocation
+					origin: originLocation,
+					sharedInterestsOverride: e2eeShared
 				)
 			}
 			.sorted { $0.distanceMeters < $1.distanceMeters }
@@ -169,7 +184,8 @@ final class MapFriendsStore {
 		from friend: MapFriendDTO,
 		payload: LocationPayloadDTO,
 		blobUpdatedAt: Date,
-		origin: CLLocation
+		origin: CLLocation,
+		sharedInterestsOverride: [String]? = nil
 	) -> MapPerson? {
 		let presence = PresenceState.from(
 			payload: payload,
@@ -184,7 +200,7 @@ final class MapFriendsStore {
 		)
 		let availability = presence.mapAvailability
 		let walking = formattedWalkingMinutes(distanceMeters: distance, presence: presence)
-		let interestsList = Array(friend.sharedInterests.prefix(4))
+		let interestsList = Array((sharedInterestsOverride ?? friend.sharedInterests).prefix(4))
 		let interests = interestsList.prefix(2).joined(separator: ", ")
 
 		return MapPerson(

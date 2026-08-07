@@ -16,16 +16,18 @@ enum MeetupLiveActivityTracker {
 	static func handleLocationUpdate(_ location: CLLocation) {
 		guard hasActiveMeetup else { return }
 
-		if let lastPushAt, Date().timeIntervalSince(lastPushAt) < minPushInterval {
-			return
-		}
-
 		Task {
+			await MeetupLiveActivityController.endExpiredIfNeeded()
+			guard hasActiveMeetup else { return }
+			if let lastPushAt, Date().timeIntervalSince(lastPushAt) < minPushInterval {
+				return
+			}
 			await push(from: location)
 		}
 	}
 
 	static func push(from location: CLLocation, force: Bool = false) async {
+		await MeetupLiveActivityController.endExpiredIfNeeded()
 		guard hasActiveMeetup else { return }
 		if !force, let lastPushAt, Date().timeIntervalSince(lastPushAt) < minPushInterval {
 			return

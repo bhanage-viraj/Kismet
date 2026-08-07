@@ -27,6 +27,7 @@ struct KismetApp: App {
 	@State private var meetupMemoryStore = AppEnvironment.shared.meetupMemoryStore
 	@State private var interestSuggestionStore = AppEnvironment.shared.interestSuggestionStore
 	@State private var presenceMode = AppEnvironment.shared.presenceMode
+	@State private var friendsOnlyVisibility = AppEnvironment.shared.friendsOnlyVisibility
 
 	private let meetupContainer = AppEnvironment.shared.meetupModelContainer
 
@@ -46,6 +47,7 @@ struct KismetApp: App {
 				.environment(meetupMemoryStore)
 				.environment(interestSuggestionStore)
 				.environment(presenceMode)
+				.environment(friendsOnlyVisibility)
 				.modelContainer(meetupContainer)
 				.task {
 					await authSession.restore()
@@ -66,6 +68,11 @@ struct KismetApp: App {
 				}
 				.onChange(of: scenePhase) { _, newPhase in
 					backgroundProximity.handleScenePhase(newPhase)
+					if newPhase == .active {
+						Task { @MainActor in
+							await MeetupLiveActivityController.endExpiredIfNeeded()
+						}
+					}
 				}
 		}
 	}

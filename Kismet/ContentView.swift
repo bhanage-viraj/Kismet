@@ -28,6 +28,7 @@ private struct SignedInPreviewHost: View {
 	@State private var locationSharing = LocationSharingService()
 	@State private var realtimeClient = RealtimeClient()
 	@State private var presenceMode = PresenceModeStore(state: .available)
+	@State private var friendsOnlyVisibility = FriendsOnlyVisibilityStore()
 
 	var body: some View {
 		ContentView()
@@ -42,11 +43,13 @@ private struct SignedInPreviewHost: View {
 					locationSharing: locationSharing,
 					friendsStore: friendsStore,
 					mapFriendsStore: mapFriendsStore,
-					presenceMode: presenceMode
+					presenceMode: presenceMode,
+					friendsOnlyVisibility: friendsOnlyVisibility
 				)
 			)
 			.environment(realtimeClient)
 			.environment(presenceMode)
+			.environment(friendsOnlyVisibility)
 			.task {
 				mapFriendsStore.loadPreviewMocks(around: MockFriendsProvider.fallbackCoordinate)
 			}

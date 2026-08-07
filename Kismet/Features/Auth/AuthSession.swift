@@ -231,10 +231,25 @@ final class AuthSession {
 				authorized: true
 			)
 			applyUser(from: me, isNewUser: false)
+			await shareInterestMatchBlobs(interestIds: me.interests)
 			return true
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 			return false
+		}
+	}
+
+	private func shareInterestMatchBlobs(interestIds: [String]) async {
+		guard let userId = user?.id ?? KeychainStore.get(.userId) else { return }
+		do {
+			let friends: FriendListResponseDTO = try await client.get("/friends")
+			await InterestMatchSharingService(client: client).share(
+				interestIds: interestIds,
+				senderUserId: userId,
+				friends: friends.friends
+			)
+		} catch {
+			// Server interests already saved; E2EE share can retry on next edit.
 		}
 	}
 

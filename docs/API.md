@@ -267,7 +267,7 @@ Requires Bearer access token. Revokes the friendship in both directions — ther
 
 The server relays opaque ciphertext and never decrypts it or holds key material. For `LOCATION` this collection behaves as a mailbox with one slot per (sender, recipient, kind): re-uploading replaces the previous blob rather than appending.
 
-Blob kinds are `LOCATION`, `AVAILABILITY` and `MESSAGE`, matched case-insensitively.
+Blob kinds are `LOCATION`, `AVAILABILITY`, `MESSAGE`, `PULSE`, `INTEREST_MATCH`, and `MEETUP`, matched case-insensitively.
 
 ### `POST /blobs`
 
@@ -377,7 +377,7 @@ A `CONNECT` without a valid access token is rejected. Subscribe to `/user/queue/
 
 Event types are `blob.available`, `friend.pair.created` and `friend.pair.revoked`. Blob events are **notifications only** and never carry ciphertext — fetch it with `GET /blobs/pending`.
 
-When APNs is configured, `LOCATION` blob uploads also send a **silent** (`content-available`) push to the recipient's registered device tokens so a backgrounded phone can wake, decrypt, and evaluate proximity on-device. The push payload carries only `type`, `kind`, and `senderUserId` — never coordinates.
+When APNs is configured, `LOCATION`, `PULSE`, and `MEETUP` blob uploads also send a **silent** (`content-available`) push to the recipient's registered device tokens so a backgrounded phone can wake, decrypt, and evaluate proximity / inbox / shared meetup on-device. The push payload carries only `type`, `kind`, and `senderUserId` — never coordinates.
 
 The broker is in-memory, so this is single-instance only; scaling out means swapping in a Redis or RabbitMQ relay.
 
@@ -398,6 +398,34 @@ Returns `{ "ok": true }`. Re-registering the same token is idempotent; a token t
 ### `DELETE /push/token`
 
 Requires Bearer access token. Body same as register. Best-effort cleanup on sign-out.
+
+### `POST /push/live-activity`
+
+Requires Bearer access token. Registers an ActivityKit push token for a meetup so the peer can receive ContentState updates.
+
+```json
+{ "meetupId": "<pulse id>", "pushToken": "<activitykit hex token>", "bundleId": "bhanageviraj.indeKismet" }
+```
+
+Returns `{ "ok": true }`.
+
+### `POST /push/live-activity/update`
+
+Requires Bearer access token. Relays ContentState to other devices registered for the same `meetupId` (skips the caller). Uses `apns-push-type: liveactivity` and topic `{bundleId}.push-type.liveactivity`. No-ops when APNs is disabled.
+
+```json
+{
+  "meetupId": "<pulse id>",
+  "etaText": "5 min",
+  "distanceText": "350 m",
+  "progress": 0.72,
+  "isEnded": false,
+  "isExpanded": false,
+  "event": "update"
+}
+```
+
+Returns `{ "ok": true }`.
 
 ## Errors
 

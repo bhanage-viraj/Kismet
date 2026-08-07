@@ -21,6 +21,7 @@ final class BackgroundProximityController {
 	private let friendsStore: FriendsStore
 	private let mapFriendsStore: MapFriendsStore
 	private let presenceMode: PresenceModeStore
+	private let friendsOnlyVisibility: FriendsOnlyVisibilityStore
 
 	private var handleTask: Task<Void, Never>?
 	private var lastHandledLocation: CLLocation?
@@ -33,13 +34,15 @@ final class BackgroundProximityController {
 		locationSharing: LocationSharingService,
 		friendsStore: FriendsStore,
 		mapFriendsStore: MapFriendsStore,
-		presenceMode: PresenceModeStore
+		presenceMode: PresenceModeStore,
+		friendsOnlyVisibility: FriendsOnlyVisibilityStore
 	) {
 		self.locationManager = locationManager
 		self.locationSharing = locationSharing
 		self.friendsStore = friendsStore
 		self.mapFriendsStore = mapFriendsStore
 		self.presenceMode = presenceMode
+		self.friendsOnlyVisibility = friendsOnlyVisibility
 	}
 
 	func start() {
@@ -102,19 +105,22 @@ final class BackgroundProximityController {
 		if let type, type != "blob.available" {
 			return false
 		}
-		if let kind, kind != "LOCATION", kind != "PULSE" {
+		if let kind, kind != "LOCATION", kind != "PULSE", kind != "MEETUP" {
 			return false
 		}
 
-		if kind == "PULSE" {
-			let inbox = AppEnvironment.shared.pulseInbox
-			let wasPosting = inbox.postsNotificationsForNewPulses
-			// Alert pushes already show a system banner — only post a richer local
-			// notification when this was a silent wake without an alert payload.
-			inbox.postsNotificationsForNewPulses = !Self.remoteNotificationHasAlert(userInfo)
+		if kind == "PULSE" || kind == "MEETUP" {
 			await friendsStore.refresh()
-			await inbox.refresh(friends: friendsStore.friends)
-			inbox.postsNotificationsForNewPulses = wasPosting || !isAppActive
+			await AppEnvironment.shared.pulseInbox.refresh(friends: friendsStore.friends)
+			if kind == "MEETUP" {
+				let meetups = await MeetupSharingService().consumePendingMeetups(friends: friendsStore.friends)
+				for item in meetups {
+					await startBackgroundMeetupLiveActivity(
+						senderUserId: item.senderUserId,
+						payload: item.payload
+					)
+				}
+			}
 			return true
 		}
 
@@ -167,6 +173,7 @@ final class BackgroundProximityController {
 			senderUserId: KeychainStore.get(.userId),
 			friends: friendsStore.friends,
 			presence: presenceMode.state,
+			friendsOnlyVisibleIds: friendsOnlyVisibility.visibleFriendIds,
 			force: force
 		)
 	}
@@ -207,8 +214,43 @@ final class BackgroundProximityController {
 		return notified || mapFriendsStore.lastRefreshedAt != nil
 	}
 
-	private static func remoteNotificationHasAlert(_ userInfo: [AnyHashable: Any]) -> Bool {
-		guard let aps = userInfo["aps"] as? [String: Any] else { return false }
-		return aps["alert"] != nil
+	private func startBackgroundMeetupLiveActivity(
+		senderUserId: String,
+		payload: MeetupPayloadDTO
+	) async {
+		let peerName = friendsStore.friends.first(where: { $0.userId == senderUserId })?.displayName
+			?? payload.peerDisplayName
+		let youName = AppEnvironment.shared.authSession.preferredDisplayName
+		let venueName = payload.venueName ?? payload.title
+		let participants: [MeetupActivityAttributes.Participant] = [
+			.init(
+				id: KeychainStore.get(.userId) ?? "you",
+				displayName: youName,
+				initials: String(youName.prefix(1)).uppercased(),
+				status: .nearby,
+				isYou: true
+			),
+			.init(
+				id: senderUserId,
+				displayName: peerName,
+				initials: String(peerName.prefix(1)).uppercased(),
+				status: .free,
+				isYou: false
+			)
+		]
+		do {
+			_ = try await MeetupLiveActivityController.start(
+				meetupID: payload.meetupId,
+				title: payload.title,
+				venueName: venueName,
+				systemImage: payload.systemImage,
+				participants: participants,
+				venueCoordinate: nil,
+				meetAt: payload.meetAt,
+				currentLocation: locationManager.userLocation
+			)
+		} catch {
+			// Live Activities may be disabled in background.
+		}
 	}
 }
