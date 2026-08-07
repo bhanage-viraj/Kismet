@@ -116,12 +116,6 @@ struct MapHomeView: View {
 					.transition(.move(edge: .top).combined(with: .opacity))
 					.onTapGesture { presentedPulse = pulse }
 				}
-
-				HStack {
-					Spacer(minLength: 0)
-					recenterOnUserButton
-						.padding(.trailing, 16)
-				}
 			}
 			.padding(.top, 8)
 			.opacity(showsFloatingMapChrome ? 1 : 0)
@@ -595,11 +589,14 @@ struct MapHomeView: View {
 		.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: KismetTheme.Chrome.headerCornerRadius, style: .continuous))
 		.shadow(color: .black.opacity(0.08), radius: 12, y: 4)
 		.overlay(alignment: .topTrailing) {
-			PresenceModePicker(
-				selection: Bindable(presenceMode).state,
-				isExpanded: $isPresencePickerExpanded,
-				onSelectFriendsOnly: { showFriendsOnlyPicker = true }
-			)
+			VStack(alignment: .trailing, spacing: 10) {
+				PresenceModePicker(
+					selection: Bindable(presenceMode).state,
+					isExpanded: $isPresencePickerExpanded,
+					onSelectFriendsOnly: { showFriendsOnlyPicker = true }
+				)
+				recenterOnUserButton
+			}
 			.padding(.top, 10)
 			.padding(.trailing, 14)
 		}
