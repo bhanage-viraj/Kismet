@@ -64,6 +64,10 @@ struct MapHomeView: View {
 	@State private var didCenterOnAccurateFix = false
 	@State private var isPresencePickerExpanded = false
 	@State private var showFriendsOnlyPicker = false
+	@State private var presentedPulse: IncomingPulse?
+	@State private var suggestionsDetent: SuggestionsSheetDetent = .peek
+	@State private var suggestionsDragOffset: CGFloat = 0
+	@State private var recordedShownCardIDs: Set<String> = []
 
 	private var displayName: String {
 		authSession.preferredDisplayName
@@ -111,6 +115,12 @@ struct MapHomeView: View {
 					.padding(.horizontal, 16)
 					.transition(.move(edge: .top).combined(with: .opacity))
 					.onTapGesture { presentedPulse = pulse }
+				}
+
+				HStack {
+					Spacer(minLength: 0)
+					recenterOnUserButton
+						.padding(.trailing, 16)
 				}
 			}
 			.padding(.top, 8)
@@ -200,11 +210,10 @@ struct MapHomeView: View {
 			await runMapSession()
 		}
 		.onChange(of: locationManager.hasFix) { _, hasFix in
-			guard hasFix, !didCenterOnUser else { return }
-			recenter(on: locationManager.displayCoordinate)
+			guard hasFix else { return }
+			centerOnUserIfNeeded(force: !didCenterOnAccurateFix)
 			Task { await friendsStore.refresh(around: locationManager.displayCoordinate) }
 			publishLocation(force: true)
-			didCenterOnUser = true
 		}
 		.onChange(of: locationManager.userLocation?.timestamp) { _, _ in
 			publishLocation(force: false)
@@ -623,6 +632,21 @@ struct MapHomeView: View {
 		.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 	}
 
+	private var recenterOnUserButton: some View {
+		Button {
+			recenter(on: locationManager.displayCoordinate)
+		} label: {
+			Image(systemName: "location.fill")
+				.font(.system(size: 15, weight: .semibold))
+				.foregroundStyle(.primary)
+				.frame(width: 40, height: 40)
+				.background(.ultraThinMaterial, in: Circle())
+				.shadow(color: .black.opacity(0.12), radius: 8, y: 2)
+		}
+		.buttonStyle(.plain)
+		.accessibilityLabel("Center on my location")
+	}
+
 	@MainActor
 	private func runMapSession() async {
 		locationSharing.start()
@@ -770,7 +794,9 @@ struct MapHomeView: View {
 			meetupId: pulse.payload.pulseId,
 			title: pulse.payload.label,
 			venueName: pulse.payload.venueName,
-			meetAt: pulse.payload.expiresAt,
+			venueLatitude: pulse.payload.venueLatitude,
+			venueLongitude: pulse.payload.venueLongitude,
+			meetAt: pulse.payload.plannedAt,
 			peerDisplayName: authSession.preferredDisplayName,
 			systemImage: "figure.walk",
 			createdAt: Date()
@@ -810,7 +836,7 @@ struct MapHomeView: View {
 				venueName: venueName,
 				systemImage: "figure.walk",
 				participants: participants,
-				venueCoordinate: nil,
+				venueCoordinate: pulse.payload.venueCoordinate,
 				meetAt: pulse.payload.plannedAt,
 				currentLocation: locationManager.userLocation
 			)
@@ -851,7 +877,7 @@ struct MapHomeView: View {
 				venueName: venueName,
 				systemImage: payload.systemImage,
 				participants: participants,
-				venueCoordinate: nil,
+				venueCoordinate: payload.venueCoordinate,
 				meetAt: payload.meetAt,
 				currentLocation: locationManager.userLocation
 			)

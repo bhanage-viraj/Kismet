@@ -41,8 +41,9 @@ struct SocialMapView: View {
 		}
 		.mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
 		.mapControls {
+			// Compass only — locate is a custom control under the Find My header
+			// so it doesn't sit under the presence chrome.
 			MapCompass()
-			MapUserLocationButton()
 		}
 	}
 

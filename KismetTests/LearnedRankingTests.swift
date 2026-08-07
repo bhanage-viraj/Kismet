@@ -176,6 +176,7 @@ struct LearnedRankingTests {
 			calendar: CalendarSlice(isBusyNow: false, nextFreeAt: nil, freeUntil: nil),
 			motion: MotionSlice(activity: .walking),
 			focus: FocusSlice(blocksSocial: false, label: nil),
+			weather: .unknown,
 			learned: learned
 		)
 	}

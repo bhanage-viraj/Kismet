@@ -96,6 +96,9 @@ struct PermissionsView: View {
 					.buttonStyle(.plain)
 					.accessibilityHint("Continues to Sign in with Apple")
 					.padding(.horizontal, 32)
+					.padding(.top, 8)
+					.padding(.bottom, 24)
+					.safeAreaPadding(.bottom, 8)
 				}
 			}
 		}

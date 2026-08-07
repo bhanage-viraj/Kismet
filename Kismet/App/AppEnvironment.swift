@@ -20,7 +20,22 @@ final class AppEnvironment {
 	let presenceMode: PresenceModeStore
 	let friendsOnlyVisibility: FriendsOnlyVisibilityStore
 	/// Last Pulse draft prepared by Intelligence / Siri (not sent until confirm).
-	var pendingPulseDraft: PulseDraft?
+	/// Mirrored to App Group so Confirm Pulse works after process death.
+	var pendingPulseDraft: PulseDraft? {
+		didSet { AppGroup.savePendingPulseDraft(pendingPulseDraft) }
+	}
+
+	/// Resolve draft from memory or App Group (cold Siri path).
+	func resolvedPendingPulseDraft() -> PulseDraft? {
+		if let pendingPulseDraft { return pendingPulseDraft }
+		let stored = AppGroup.loadPendingPulseDraft()
+		pendingPulseDraft = stored
+		return stored
+	}
+
+	func clearPendingPulseDraft() {
+		pendingPulseDraft = nil
+	}
 
 	init(
 		authSession: AuthSession? = nil,
@@ -79,6 +94,7 @@ final class AppEnvironment {
 		self.meetupMemoryStore = MeetupMemoryStore(container: container)
 		self.interestSuggestionStore = InterestSuggestionStore()
 		self.meetupMemoryStore.attachSpotlightIndexer()
+		self.pendingPulseDraft = AppGroup.loadPendingPulseDraft()
 	}
 
 	static let shared = AppEnvironment()

@@ -44,7 +44,10 @@ struct PulseInboxBanner: View {
 
 	private var subtitle: String {
 		var parts: [String] = []
-		if let venue = pulse.payload.venueName, !venue.isEmpty {
+		if let message = pulse.payload.message?.trimmingCharacters(in: .whitespacesAndNewlines),
+		   !message.isEmpty {
+			parts.append(message)
+		} else if let venue = pulse.payload.venueName, !venue.isEmpty {
 			parts.append(venue)
 		}
 		parts.append(expiresText)

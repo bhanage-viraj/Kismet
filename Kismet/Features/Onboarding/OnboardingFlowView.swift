@@ -75,7 +75,7 @@ struct OnboardingFlowView: View {
 				.transition(.opacity)
 			}
 		}
-		.ignoresSafeArea()
+		.ignoresSafeArea(step == .splash ? .all : [])
 	}
 
 	private enum Step {

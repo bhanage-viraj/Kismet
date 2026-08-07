@@ -20,6 +20,7 @@ struct ContextBuilder: Sendable {
 		async let calendar = CalendarContextProvider().current()
 		async let motion = MotionContextProvider().current()
 		async let focus = FocusContextProvider().current()
+		async let weather = WeatherContextProvider(coordinate: coordinate).current()
 
 		let loc = await location
 		let cal = await calendar
@@ -39,6 +40,7 @@ struct ContextBuilder: Sendable {
 			calendar: cal,
 			motion: await motion,
 			focus: await focus,
+			weather: await weather,
 			learned: learned
 		)
 	}

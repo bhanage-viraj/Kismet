@@ -65,8 +65,7 @@ struct SuggestionAgentProfile: LanguageModelSession.DynamicProfile {
 				Instructions {
 					PromptBuilder.instructions + """
 
-					Also draft a short pulseMessage (1 sentence) the user could send — friendly, \
-					specific, no invented facts. Leave pulseMessage empty only when action is none.
+					Leave pulseMessage and venueName empty — the app drafts the Pulse body from the selected venue.
 					"""
 				}
 			}
@@ -79,7 +78,8 @@ struct SuggestionAgentProfile: LanguageModelSession.DynamicProfile {
 enum SuggestionAgentRunner {
 	static func generate(
 		context: KismetContext,
-		ranked: [RankedOpportunity]
+		ranked: [RankedOpportunity],
+		venueStates: [String: VenueResolutionState] = [:]
 	) async throws -> PulseSuggestionBundle {
 		let state = SuggestionAgentState()
 		let profile = SuggestionAgentProfile(
@@ -89,7 +89,11 @@ enum SuggestionAgentRunner {
 		let session = LanguageModelSession(profile: profile)
 		session.prewarm()
 
-		let basePrompt = PromptBuilder.prompt(context: context, ranked: ranked)
+		let basePrompt = PromptBuilder.prompt(
+			context: context,
+			ranked: ranked,
+			venueStates: venueStates
+		)
 
 		state.phase = .memory
 		_ = try await session.respond(
@@ -102,18 +106,27 @@ enum SuggestionAgentRunner {
 		)
 
 		state.phase = .venue
-		_ = try await session.respond(
-			to: """
-			If a venue would help any candidate, use findNearbyVenue. Otherwise say no venue needed.
-			"""
-		)
+		let needsToolBackup = ranked.contains { venueStates[$0.friend.id] == nil || venueStates[$0.friend.id] == .empty }
+		if needsToolBackup {
+			_ = try await session.respond(
+				to: """
+				If a venue would help any candidate that lacks grounded_venue, use findNearbyVenue. \
+				Otherwise say no venue needed.
+				"""
+			)
+		} else {
+			_ = try await session.respond(
+				to: "Grounded venues are already provided. Confirm no invented places; say ready to draft."
+			)
+		}
 
 		state.phase = .draft
 		let response = try await session.respond(
 			to: """
 			\(basePrompt)
 
-			Return structured suggestions now. Include pulseMessage drafts grounded only in facts above.
+			Return structured suggestions now. Leave pulseMessage and venueName empty — \
+			the app drafts the Pulse body from the selected grounded venue.
 			""",
 			generating: PulseSuggestionBundle.self
 		)

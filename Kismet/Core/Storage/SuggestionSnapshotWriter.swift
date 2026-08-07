@@ -108,7 +108,12 @@ enum SuggestionSnapshotWriter {
 			freeUntilText: freeUntilText,
 			avatarFileName: avatarFileName,
 			latitude: card.coordinate.latitude,
-			longitude: card.coordinate.longitude
+			longitude: card.coordinate.longitude,
+			presenceRaw: card.presence.rawValue,
+			availabilityRaw: card.availability.rawValue,
+			distanceMeters: card.distanceMeters,
+			ctaSystemImage: card.ctaSystemImage,
+			pulseMessage: card.pulseMessage
 		)
 	}
 

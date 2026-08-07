@@ -37,7 +37,10 @@ final class PulsePublisher {
 		senderUserId: String?,
 		friends: [FriendSummaryDTO]
 	) async throws -> OutgoingPulse {
-		try await send(
+		guard PulseTargeting.isEligibleRecipient(for: suggestion) else {
+			throw PulsePublisherError.recipientUnavailable
+		}
+		return try await send(
 			draft: .from(card: suggestion),
 			senderUserId: senderUserId,
 			friends: friends
@@ -57,19 +60,27 @@ final class PulsePublisher {
 		lastErrorMessage = nil
 		defer { isSending = false }
 
-		guard PulseTargeting.isEligibleRecipient(for: suggestion) else {
-			throw PulsePublisherError.recipientUnavailable
-		}
+		let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+		let venue = PulseVenueFields.fromDraft(draft)
+		let startsAt = draft.startsAt
+		let expiresAt = max(startsAt.addingTimeInterval(45 * 60), Date().addingTimeInterval(45 * 60))
+		let message: String? = {
+			let trimmed = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+			guard !trimmed.isEmpty else { return nil }
+			return trimmed
+		}()
 
-		let expiresAt = Date().addingTimeInterval(45 * 60)
 		let payload = PulsePayloadDTO(
 			pulseId: UUID().uuidString,
 			emoji: draft.activity.emoji,
 			label: title.isEmpty ? draft.activity.defaultTitle : title,
 			expiresAt: expiresAt,
-			venueName: venue.isEmpty ? nil : venue,
+			venueName: venue.name,
+			venueLatitude: venue.latitude,
+			venueLongitude: venue.longitude,
+			message: message,
 			createdAt: Date(),
-			venueAddress: address.isEmpty ? nil : address,
+			venueAddress: venue.address,
 			startsAt: startsAt,
 			activityId: draft.activity.rawValue
 		)

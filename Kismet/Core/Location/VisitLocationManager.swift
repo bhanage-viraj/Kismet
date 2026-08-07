@@ -97,7 +97,14 @@ final class VisitLocationManager: NSObject {
 		manager.allowsBackgroundLocationUpdates = false
 	}
 
-	/// Single system prompt for map use. Always can later be enabled in Settings if needed.
+	/// Single Always authorization dialog (requires Always + WhenInUse usage strings).
+	/// Prefer this over When-In-Use-then-upgrade so significant-change can start after one grant.
+	func requestAlwaysAuthorization() {
+		guard authorizationStatus == .notDetermined else { return }
+		manager.requestAlwaysAuthorization()
+	}
+
+	/// Kept for call sites that only need foreground map use after Always was denied/limited.
 	func requestWhenInUseAuthorization() {
 		guard authorizationStatus == .notDetermined else { return }
 		manager.requestWhenInUseAuthorization()
@@ -107,7 +114,7 @@ final class VisitLocationManager: NSObject {
 		authorizationStatus = manager.authorizationStatus
 		guard isAuthorized else {
 			if needsPermissionPrompt {
-				requestWhenInUseAuthorization()
+				requestAlwaysAuthorization()
 			}
 			return
 		}
@@ -160,7 +167,7 @@ final class VisitLocationManager: NSObject {
 			return
 		}
 		if needsPermissionPrompt {
-			requestWhenInUseAuthorization()
+			requestAlwaysAuthorization()
 		} else if isAuthorized {
 			startUpdating()
 			if isAlwaysAuthorized {

@@ -203,7 +203,7 @@ private struct InsightCard: View {
 						.lineLimit(3)
 
 					if let venue = card.venueName {
-						Text(venueETALabel(venue))
+						Text(venueDisplayLabel(venue))
 							.font(.caption.weight(.semibold))
 							.foregroundStyle(KismetTheme.Status.free)
 					}
@@ -255,7 +255,10 @@ private struct InsightCard: View {
 		)
 	}
 
-	private func venueETALabel(_ venue: String) -> String {
+	private func venueDisplayLabel(_ venue: String) -> String {
+		if let label = card.venueDisplayETALabel, !label.isEmpty {
+			return "\(venue) · \(label)"
+		}
 		if let minutes = card.venueETAMinutes {
 			return "\(venue) · \(minutes) min"
 		}
@@ -364,6 +367,7 @@ private var previewContext: KismetContext {
 		calendar: CalendarSlice(isBusyNow: false, nextFreeAt: nil, freeUntil: nil),
 		motion: MotionSlice(activity: .walking),
 		focus: FocusSlice(blocksSocial: false, label: nil),
+		weather: .unknown,
 		learned: .empty
 	)
 }

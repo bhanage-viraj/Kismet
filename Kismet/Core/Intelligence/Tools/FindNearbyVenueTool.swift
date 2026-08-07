@@ -8,9 +8,11 @@ struct FindNearbyVenueTool: Tool {
 	let description = "Finds a real nearby cafe or food spot using MapKit near the user's location."
 
 	private let coordinate: CLLocationCoordinate2D
+	private let searcher: any VenueSearching
 
-	init(coordinate: CLLocationCoordinate2D) {
+	init(coordinate: CLLocationCoordinate2D, searcher: any VenueSearching = NearbyVenueSearch()) {
 		self.coordinate = coordinate
+		self.searcher = searcher
 	}
 
 	@Generable
@@ -20,30 +22,17 @@ struct FindNearbyVenueTool: Tool {
 	}
 
 	func call(arguments: Arguments) async throws -> String {
-		let request = MKLocalSearch.Request()
-		request.naturalLanguageQuery = arguments.query
-		request.resultTypes = .pointOfInterest
-		request.region = MKCoordinateRegion(
-			center: coordinate,
-			latitudinalMeters: 1_500,
-			longitudinalMeters: 1_500
-		)
-
-		let response = try await MKLocalSearch(request: request).start()
-		let items = response.mapItems.prefix(3)
-		guard !items.isEmpty else {
+		let queryType = VenueQueryType.infer(fromPlaceTypeSignal: arguments.query) ?? .coffee
+		let venueQuery = VenueQuery(type: queryType, origin: coordinate, transportPreference: .walking)
+		let items = try await searcher.search(query: venueQuery)
+		guard let candidates = VenueResolver.resolve(candidates: items, query: venueQuery) else {
 			return "No venues found for \(arguments.query)."
 		}
 
-		let lines = items.map { item -> String in
-			let name = item.name ?? "Place"
-			let meters = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-				.distance(from: CLLocation(
-					latitude: item.location.coordinate.latitude,
-					longitude: item.location.coordinate.longitude
-				))
-			let minutes = max(1, Int((meters / 80).rounded()))
-			return "\(name) (~\(minutes) min walk)"
+		// Tool output for the model: suggested + up to 2 alternatives (display ETA only).
+		let lines = candidates.all.prefix(3).map { venue -> String in
+			let eta = venue.displayETALabel ?? "\(Int(venue.distanceMeters.rounded())) m"
+			return "\(venue.name) (~\(eta))"
 		}
 		return lines.joined(separator: "; ")
 	}

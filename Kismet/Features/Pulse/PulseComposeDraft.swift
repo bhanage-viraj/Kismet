@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import SwiftUI
 
@@ -73,24 +74,56 @@ struct PulseComposeDraft: Identifiable, Hashable, Sendable {
 	var recipientUserId: String
 	var recipientDisplayName: String
 	var suggestionCardID: String?
+	/// MapKit place pin only — never live GPS.
+	var venueLatitude: Double? = nil
+	var venueLongitude: Double? = nil
+	var venueCandidates: GroundedVenueCandidates? = nil
+	var activityCandidates: GroundedActivityCandidates? = nil
+	var draftHints: PulseDraftHints? = nil
+
+	mutating func apply(venue: GroundedVenue) {
+		venueName = venue.name
+		venueAddress = venue.addressSummary ?? venueAddress
+		venueLatitude = venue.latitude
+		venueLongitude = venue.longitude
+	}
+
+	mutating func selectActivity(_ next: PulseActivity, rewriteTitleIfDefault: Bool = true) {
+		let previousDefault = activity.defaultTitle
+		activity = next
+		if rewriteTitleIfDefault {
+			let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+			if trimmed.isEmpty || trimmed == previousDefault {
+				title = next.defaultTitle
+			}
+		}
+	}
 
 	static func from(card: SuggestionCard) -> PulseComposeDraft {
-		let activity = PulseActivity.allCases.first {
-			card.ctaTitle.localizedCaseInsensitiveContains($0.title)
-				|| (card.venueName?.localizedCaseInsensitiveContains($0.title) == true)
-		} ?? .coffee
+		let activity = card.activityCandidates?.suggested
+			?? PulseActivity.allCases.first {
+				card.ctaTitle.localizedCaseInsensitiveContains($0.title)
+					|| (card.venueName?.localizedCaseInsensitiveContains($0.title) == true)
+			}
+			?? .coffee
 
+		let pin = PulseVenueFields.fromSuggestion(card)
 		return PulseComposeDraft(
 			title: card.pulseMessage?.nilIfEmpty
 				?? card.ctaTitle.nilIfEmpty
 				?? activity.defaultTitle,
 			activity: activity,
-			venueName: card.venueName ?? "",
-			venueAddress: "",
+			venueName: pin.name ?? card.venueName ?? "",
+			venueAddress: card.selectedVenue?.addressSummary ?? "",
 			startsAt: defaultEveningStart,
 			recipientUserId: card.friendID,
 			recipientDisplayName: card.displayName,
-			suggestionCardID: card.id
+			suggestionCardID: card.id,
+			venueLatitude: pin.latitude,
+			venueLongitude: pin.longitude,
+			venueCandidates: card.venueCandidates,
+			activityCandidates: card.activityCandidates,
+			draftHints: card.draftHints
 		)
 	}
 

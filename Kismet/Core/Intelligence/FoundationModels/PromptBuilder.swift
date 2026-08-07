@@ -10,10 +10,17 @@ enum PromptBuilder {
 		Respect busy/Focus constraints. No conversational filler.
 		When a learned memory summary is present, lightly favor habitual hangout times and people — \
 		but never invent meetup history. Soften or skip friends marked met_recently.
+		If grounded_venue is present for a candidate, treat it as a known nearby place fact — \
+		do not invent other venue names. Leave venueName and pulseMessage empty in structured output \
+		(the app attaches grounded venues and drafts the Pulse body from the selected place).
 		"""
 	}
 
-	static func prompt(context: KismetContext, ranked: [RankedOpportunity]) -> String {
+	static func prompt(
+		context: KismetContext,
+		ranked: [RankedOpportunity],
+		venueStates: [String: VenueResolutionState] = [:]
+	) -> String {
 		var lines: [String] = []
 		lines.append("Time: \(context.generatedAt.formatted(date: .omitted, time: .shortened))")
 		lines.append("User: \(context.user.displayName)")
@@ -22,6 +29,11 @@ enum PromptBuilder {
 		}
 		lines.append("User busy now: \(context.user.isBusyNow)")
 		lines.append("Motion: \(context.motion.activity.rawValue)")
+		if context.weather.condition != .unknown {
+			let weatherLine = context.weather.summary.map { "Weather: \($0)" }
+				?? "Weather: \(context.weather.condition.rawValue)"
+			lines.append(weatherLine)
+		}
 		if !context.user.interests.isEmpty {
 			lines.append("User interests: \(context.user.interests.joined(separator: ", "))")
 		}
@@ -71,10 +83,25 @@ enum PromptBuilder {
 					parts.append("usual_spot=\(category.rawValue)")
 				}
 			}
+			if case .resolved(let candidates) = venueStates[friend.id] {
+				let suggested = candidates.suggested
+				parts.append("grounded_venue=\(suggested.name)")
+				if let label = suggested.displayETALabel {
+					parts.append("grounded_distance=\(label)")
+				}
+				if !candidates.alternatives.isEmpty {
+					parts.append("venue_alternatives=\(candidates.alternatives.count)")
+				}
+			}
 			parts.append("codes=\(item.reasonCodes.map(\.rawValue).joined(separator: "|"))")
 			lines.append("- " + parts.joined(separator: "; "))
 		}
-		lines.append("Return up to \(ranked.count) structured suggestions. Pick a venue name only if clearly implied by shared interests or usual_spot; otherwise leave venue empty.")
+		lines.append(
+			"""
+			Return up to \(ranked.count) structured suggestions. \
+			Leave venueName, venueETAMinutes, and pulseMessage empty — the app supplies grounded venues and the Pulse draft.
+			"""
+		)
 		return lines.joined(separator: "\n")
 	}
 }
