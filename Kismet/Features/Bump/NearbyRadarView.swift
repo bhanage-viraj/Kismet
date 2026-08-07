@@ -69,7 +69,8 @@ struct NearbyRadarView: View {
 	private var radarCanvas: some View {
 		Group {
 			if animateSearch {
-				SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { timeline in
+				// 12Hz is enough for the sweep; 30fps was rebuilding the full canvas every frame.
+				SwiftUI.TimelineView(.periodic(from: .now, by: 1.0 / 12.0)) { timeline in
 					radarContent(at: timeline.date, sweeping: true)
 				}
 			} else {

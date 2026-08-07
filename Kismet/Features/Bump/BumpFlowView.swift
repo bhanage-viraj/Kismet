@@ -1,7 +1,7 @@
 import SwiftUI
 import UIKit
 
-/// Radar tab host: live nearby canvas + Bump consent ceremony.
+/// Nearby Multipeer pairing flow (opened from More → Add nearby friend).
 struct BumpFlowView: View {
 	@Environment(AuthSession.self) private var authSession
 	@Environment(FriendsStore.self) private var friendsStore
@@ -19,7 +19,7 @@ struct BumpFlowView: View {
 			} else if let startFailedMessage {
 				startupError(startFailedMessage)
 			} else {
-				ProgressView("Starting Radar…")
+				ProgressView("Looking for people…")
 					.frame(maxWidth: .infinity, maxHeight: .infinity)
 			}
 		}

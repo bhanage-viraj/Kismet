@@ -46,14 +46,14 @@ struct AIContextInsightsView: View {
 				ContentUnavailableView(
 					"No nearby context yet",
 					systemImage: "sparkles",
-					description: Text("When friends are around, Kismet will surface the best moments to connect.")
+					description: Text("When friends are around, Who's Out will surface the best moments to connect.")
 				)
 				.frame(maxWidth: .infinity, minHeight: 120)
 				.padding(.horizontal, 16)
 			} else {
 				ScrollView {
 					LazyVStack(spacing: 12) {
-						if let statusMessage, !statusMessage.isEmpty {
+						if let statusMessage, !statusMessage.isEmpty, cards.isEmpty {
 							Text(statusMessage)
 								.font(.caption)
 								.foregroundStyle(.secondary)

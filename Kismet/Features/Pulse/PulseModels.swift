@@ -7,6 +7,14 @@ struct PulsePayloadDTO: Codable, Sendable, Equatable {
 	var expiresAt: Date
 	var venueName: String?
 	var createdAt: Date
+	/// Optional street / neighborhood line under the venue name.
+	var venueAddress: String? = nil
+	/// Planned meet time. Falls back to `expiresAt` for older payloads.
+	var startsAt: Date? = nil
+	/// Compose activity id (`coffee`, `walk`, …).
+	var activityId: String? = nil
+
+	var plannedAt: Date { startsAt ?? expiresAt }
 }
 
 struct OutgoingPulse: Identifiable, Sendable {

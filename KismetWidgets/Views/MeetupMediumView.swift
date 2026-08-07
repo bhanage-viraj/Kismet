@@ -136,7 +136,7 @@ struct MeetupMediumView: View {
 			Text("No meetup right now")
 				.font(.subheadline.weight(.semibold))
 				.foregroundStyle(.primary)
-			Text("Open Kismet when friends are free nearby")
+			Text("Open Who's Out when friends are free nearby")
 				.font(.caption)
 				.foregroundStyle(.secondary)
 				.lineLimit(2)

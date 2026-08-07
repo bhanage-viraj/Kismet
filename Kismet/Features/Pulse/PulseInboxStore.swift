@@ -10,8 +10,12 @@ final class PulseInboxStore {
 	private(set) var lastErrorMessage: String?
 	private(set) var lastRefreshedAt: Date?
 
+	/// When true, newly decoded pulses also post a system notification.
+	var postsNotificationsForNewPulses = false
+
 	private let client: APIClient
 	private let crypto: CryptoBox
+	private var notifiedBlobIDs: Set<String> = []
 
 	init(client: APIClient = .shared, crypto: CryptoBox = .shared) {
 		self.client = client
@@ -72,9 +76,17 @@ final class PulseInboxStore {
 				}
 			}
 
+			let previousIDs = Set(pulses.map(\.blobId))
 			pulses = decoded
 			lastRefreshedAt = Date()
 			Self.persistOpenPulse(decoded.first)
+
+			if postsNotificationsForNewPulses {
+				for pulse in decoded where !previousIDs.contains(pulse.blobId) {
+					notifyIfNeeded(pulse)
+				}
+			}
+			notifiedBlobIDs.formIntersection(Set(decoded.map(\.blobId)))
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
@@ -87,6 +99,8 @@ final class PulseInboxStore {
 				body: BlobAckRequestDTO(blobIds: [pulse.blobId])
 			)
 			pulses.removeAll { $0.blobId == pulse.blobId }
+			notifiedBlobIDs.remove(pulse.blobId)
+			PulseInviteNotifier.clearPulse(blobId: pulse.blobId)
 			Self.persistOpenPulse(activePulses.first)
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
@@ -98,13 +112,25 @@ final class PulseInboxStore {
 		lastErrorMessage = nil
 		lastRefreshedAt = nil
 		isLoading = false
+		notifiedBlobIDs.removeAll()
 		Self.persistOpenPulse(nil)
+	}
+
+	private func notifyIfNeeded(_ pulse: IncomingPulse) {
+		guard notifiedBlobIDs.insert(pulse.blobId).inserted else { return }
+		PulseInviteNotifier.notifyNewPulse(
+			blobId: pulse.blobId,
+			senderDisplayName: pulse.senderDisplayName,
+			label: pulse.payload.label,
+			emoji: pulse.payload.emoji
+		)
 	}
 
 	private static func persistOpenPulse(_ pulse: IncomingPulse?) {
 		guard let pulse else {
 			AppGroup.saveOpenPulse(nil)
-			WidgetKit.WidgetCenter.shared.reloadAllTimelines()
+			WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.widgetKind)
+			WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.meetupWidgetKind)
 			return
 		}
 		AppGroup.saveOpenPulse(
@@ -119,6 +145,7 @@ final class PulseInboxStore {
 				pulseId: pulse.payload.pulseId
 			)
 		)
-		WidgetKit.WidgetCenter.shared.reloadAllTimelines()
+		WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.widgetKind)
+		WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.meetupWidgetKind)
 	}
 }

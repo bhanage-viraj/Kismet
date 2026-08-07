@@ -94,7 +94,7 @@ struct NearbyNowSmallView: View {
 					.minimumScaleFactor(0.85)
 					.layoutPriority(1)
 
-				Text("Open Kismet for live suggestions")
+				Text("Open Who's Out for live suggestions")
 					.font(.caption2.weight(.regular))
 					.foregroundStyle(.secondary)
 					.lineLimit(2)

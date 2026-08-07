@@ -3,6 +3,9 @@ import Foundation
 import WidgetKit
 
 enum SuggestionSnapshotWriter {
+	private static let mapSnapshotMinInterval: TimeInterval = 45
+	private static var lastMapSnapshotAt: Date?
+
 	static func persist(
 		cards: [SuggestionCard],
 		updatedAt: Date = Date(),
@@ -19,20 +22,33 @@ enum SuggestionSnapshotWriter {
 			userCoordinate: userCoordinate
 		)
 		AppGroup.saveSnapshot(snapshot)
-		reloadWidgets()
-		// Always refresh the map image (empty = map with only “you”, no friend pins).
-		WidgetMapSnapshotRenderer.refresh(from: snapshot)
+		// Availability / meetup can update immediately; map waits until MapKit finishes.
+		reloadListWidgets()
+		let shouldRenderMap: Bool = {
+			guard let lastMapSnapshotAt else { return true }
+			return Date().timeIntervalSince(lastMapSnapshotAt) >= mapSnapshotMinInterval
+		}()
+		if shouldRenderMap {
+			lastMapSnapshotAt = Date()
+			Task {
+				await WidgetMapSnapshotRenderer.refresh(from: snapshot)
+			}
+		}
 	}
 
 	static func clear() {
 		AppGroup.clearSnapshot()
 		AppGroup.clearCachedMapImage()
-		reloadWidgets()
+		reloadListWidgets()
+		WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.mapWidgetKind)
 	}
 
 	/// Warm an empty / location-only map for the Friends Map widget.
-	static func persistEmptyMap(userCoordinate: CLLocationCoordinate2D?) {
-		persist(cards: [], userCoordinate: userCoordinate)
+	static func persistEmptyMap(userCoordinate: CLLocationCoordinate2D?) async {
+		let snapshot = makeSnapshot(from: [], userCoordinate: userCoordinate)
+		AppGroup.saveSnapshot(snapshot)
+		reloadListWidgets()
+		await WidgetMapSnapshotRenderer.refresh(from: snapshot)
 	}
 
 	static func makeSnapshot(
@@ -183,9 +199,8 @@ enum SuggestionSnapshotWriter {
 		return value.isEmpty ? "?" : value
 	}
 
-	private static func reloadWidgets() {
+	private static func reloadListWidgets() {
 		WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.widgetKind)
 		WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.meetupWidgetKind)
-		WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.mapWidgetKind)
 	}
 }

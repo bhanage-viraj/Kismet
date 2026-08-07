@@ -2,12 +2,27 @@ import CoreMotion
 import Foundation
 
 struct MotionContextProvider: ContextProviding {
+	private static let queryTimeout: Duration = .milliseconds(300)
+
 	func current() async -> MotionSlice {
 		guard CMMotionActivityManager.isActivityAvailable() else {
 			return MotionSlice(activity: .unknown)
 		}
 
-		return await withCheckedContinuation { continuation in
+		return await withTaskGroup(of: MotionSlice.self) { group in
+			group.addTask { await self.queryActivity() }
+			group.addTask {
+				try? await Task.sleep(for: Self.queryTimeout)
+				return MotionSlice(activity: .unknown)
+			}
+			let first = await group.next() ?? MotionSlice(activity: .unknown)
+			group.cancelAll()
+			return first
+		}
+	}
+
+	private func queryActivity() async -> MotionSlice {
+		await withCheckedContinuation { continuation in
 			let manager = CMMotionActivityManager()
 			let queue = OperationQueue()
 			queue.maxConcurrentOperationCount = 1

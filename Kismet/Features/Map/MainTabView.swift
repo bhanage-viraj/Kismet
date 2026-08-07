@@ -2,8 +2,6 @@ import SwiftUI
 
 enum AppTab: String, CaseIterable, Hashable, Identifiable {
 	case map
-	case radar
-	case timeline
 	case more
 
 	var id: String { rawValue }
@@ -11,8 +9,6 @@ enum AppTab: String, CaseIterable, Hashable, Identifiable {
 	var title: String {
 		switch self {
 		case .map: "Map"
-		case .radar: "Radar"
-		case .timeline: "Timeline"
 		case .more: "More"
 		}
 	}
@@ -20,45 +16,8 @@ enum AppTab: String, CaseIterable, Hashable, Identifiable {
 	var icon: String {
 		switch self {
 		case .map: "map"
-		case .radar: "scope"
-		case .timeline: "calendar"
 		case .more: "ellipsis"
 		}
-	}
-}
-
-/// Sheet heights for the AI insights bottom accessory.
-private enum InsightsDetent: Int, CaseIterable, Comparable {
-	case collapsed
-	case medium
-	case expanded
-
-	static func < (lhs: InsightsDetent, rhs: InsightsDetent) -> Bool {
-		lhs.rawValue < rhs.rawValue
-	}
-
-	var contentHeight: CGFloat? {
-		switch self {
-		case .collapsed: nil
-		// Tall enough to show one full card + a peek of the next, so scrolling is obvious.
-		case .medium: 280
-		case .expanded: 420
-		}
-	}
-
-	func advancing(by translation: CGFloat) -> InsightsDetent {
-		// Negative translation = drag up = expand.
-		if translation < -48 { return next }
-		if translation > 48 { return previous }
-		return self
-	}
-
-	var next: InsightsDetent {
-		InsightsDetent(rawValue: rawValue + 1) ?? self
-	}
-
-	var previous: InsightsDetent {
-		InsightsDetent(rawValue: rawValue - 1) ?? self
 	}
 }
 
@@ -72,8 +31,6 @@ struct MainTabView: View {
 	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
 
 	@State private var selectedTab: AppTab = .map
-	@State private var insightsDetent: InsightsDetent = .collapsed
-	@State private var dragOffset: CGFloat = 0
 	@State private var ctaToast: String?
 	@State private var recordedShownCardIDs: Set<String> = []
 	@Namespace private var glassNamespace
@@ -114,6 +71,14 @@ struct MainTabView: View {
 			}
 			.tabBarMinimizeBehavior(.onScrollDown)
 
+			Tab(AppTab.more.title, systemImage: AppTab.more.icon, value: AppTab.more) {
+				MoreView(embedded: false)
+			}
+		}
+		// Shared system liquid-glass tab bar (Find My style). Suggestions are a
+		// Map-only sheet above this bar — never tabViewBottomAccessory.
+		.tabBarMinimizeBehavior(.never)
+		.overlay(alignment: .top) {
 			if let ctaToast {
 				Text(ctaToast)
 					.font(.footnote.weight(.semibold))
@@ -209,65 +174,16 @@ struct MainTabView: View {
 				.padding(.bottom, 10)
 			}
 		}
-	}
-
-	private var detentGrabber: some View {
-		Capsule()
-			.fill(.secondary.opacity(0.45))
-			.frame(width: 36, height: 5)
-			.padding(.top, 10)
-			.padding(.bottom, 8)
-			.frame(maxWidth: .infinity)
-			.contentShape(Rectangle())
-			.onTapGesture {
-				withAnimation(.snappy) {
-					insightsDetent = insightsDetent.next == insightsDetent ? .collapsed : insightsDetent.next
+		.sheet(item: $composeDraft) { draft in
+			PulseComposeSheetHost(
+				draft: draft,
+				isSending: pulsePublisher.isSending,
+				onSend: { edited in
+					Task { await sendPulse(draft: edited) }
 				}
-			}
-	}
-
-	private var collapsedAccessory: some View {
-		Button {
-			withAnimation(.snappy) { insightsDetent = .medium }
-		} label: {
-			HStack(spacing: 10) {
-				Image(systemName: "sparkles")
-					.font(.subheadline.weight(.semibold))
-					.foregroundStyle(KismetTheme.Status.free)
-
-				VStack(alignment: .leading, spacing: 2) {
-					Text("Suggestions")
-						.font(.subheadline.weight(.semibold))
-						.foregroundStyle(.primary)
-
-					Text(accessorySubtitle)
-						.font(.caption2)
-						.foregroundStyle(.secondary)
-						.lineLimit(1)
-				}
-
-				Spacer(minLength: 0)
-
-				Image(systemName: "chevron.up")
-					.font(.caption.weight(.bold))
-					.foregroundStyle(.secondary)
-			}
-			.padding(.horizontal, 16)
-			.padding(.vertical, 14)
-			.contentShape(Rectangle())
-		}
-		.buttonStyle(.plain)
-		.accessibilityLabel("Expand Suggestions")
-	}
-
-	private var accessorySubtitle: String {
-		let count = suggestionCards.count
-		if count == 0 {
-			return suggestionEngine.store.statusMessage ?? "Nothing nearby right now"
-		}
-		if count == 1 {
-			let name = suggestionCards[0].displayName
-			return "\(name) — tap to reconnect"
+			)
+			.presentationDetents([.large])
+			.presentationDragIndicator(.visible)
 		}
 		return "\(count) suggestions"
 	}
@@ -314,23 +230,31 @@ struct MainTabView: View {
 	}
 
 	@MainActor
-	private func sendPulse(for card: SuggestionCard) async {
+	private func sendPulse(draft: PulseComposeDraft) async {
 		do {
 			let pulse = try await pulsePublisher.send(
-				from: card,
+				draft: draft,
 				senderUserId: authSession.user?.id ?? KeychainStore.get(.userId),
 				friends: pairedFriends.friends
 			)
-			recordFeedback(card, action: .cta)
+			if let cardID = draft.suggestionCardID,
+			   let card = suggestionEngine.store.cards.first(where: { $0.id == cardID }) {
+				meetupMemoryStore.recordFeedback(
+					friendUserId: card.friendID,
+					action: .cta,
+					reasonCodes: card.reasonCodes.map(\.rawValue)
+				)
+			}
 			meetupMemoryStore.recordMeetup(
-				friendUserId: card.friendID,
-				friendDisplayName: card.displayName,
-				venueName: card.venueName,
+				friendUserId: draft.recipientUserId,
+				friendDisplayName: draft.recipientDisplayName,
+				venueName: draft.venueName.isEmpty ? nil : draft.venueName,
 				source: .pulse,
 				outcome: .pending
 			)
-			let venue = card.venueName.map { " · \($0)" } ?? ""
-			showToast("Pulse sent to \(card.displayName)\(venue)")
+			composeDraft = nil
+			let venue = draft.venueName.isEmpty ? "" : " · \(draft.venueName)"
+			showToast("Pulse sent to \(draft.recipientDisplayName)\(venue)")
 			_ = pulse
 		} catch {
 			showToast((error as? LocalizedError)?.errorDescription ?? "Couldn't send Pulse")

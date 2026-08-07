@@ -25,6 +25,12 @@ final class VisitLocationManager: NSObject {
 
 	var hasFix: Bool { userCoordinate != nil }
 
+	/// Fresh enough for camera recenter — skips stale cached Core Location fixes.
+	var hasAccurateFix: Bool {
+		guard let userLocation else { return false }
+		return Self.isAccurateEnough(userLocation)
+	}
+
 	var isAuthorized: Bool {
 		switch authorizationStatus {
 		case .authorizedWhenInUse, .authorizedAlways:
@@ -76,7 +82,9 @@ final class VisitLocationManager: NSObject {
 	private let manager = CLLocationManager()
 	private var geocodeTask: Task<Void, Never>?
 	private var lastGeocodedLocation: CLLocation?
-	private let alwaysPromptDefaultsKey = "location.didRequestAlwaysAuthorization"
+
+	private static let maxFixAge: TimeInterval = 90
+	private static let maxHorizontalAccuracy: CLLocationAccuracy = 100
 
 	override init() {
 		authorizationStatus = manager.authorizationStatus
@@ -89,18 +97,10 @@ final class VisitLocationManager: NSObject {
 		manager.allowsBackgroundLocationUpdates = false
 	}
 
+	/// Single system prompt for map use. Always can later be enabled in Settings if needed.
 	func requestWhenInUseAuthorization() {
 		guard authorizationStatus == .notDetermined else { return }
 		manager.requestWhenInUseAuthorization()
-	}
-
-	/// Upgrade path after When In Use — required before significant-change monitoring works reliably.
-	func requestAlwaysAuthorizationIfNeeded() {
-		authorizationStatus = manager.authorizationStatus
-		guard authorizationStatus == .authorizedWhenInUse else { return }
-		guard !UserDefaults.standard.bool(forKey: alwaysPromptDefaultsKey) else { return }
-		UserDefaults.standard.set(true, forKey: alwaysPromptDefaultsKey)
-		manager.requestAlwaysAuthorization()
 	}
 
 	func startUpdating() {
@@ -123,7 +123,7 @@ final class VisitLocationManager: NSObject {
 	/// Battery-friendly background path: cell/Wi‑Fi handoffs wake the app to republish location.
 	func startSignificantLocationMonitoring() {
 		authorizationStatus = manager.authorizationStatus
-		guard isAuthorized else { return }
+		guard isAlwaysAuthorized else { return }
 		guard CLLocationManager.significantLocationChangeMonitoringAvailable() else { return }
 		manager.startMonitoringSignificantLocationChanges()
 		isMonitoringSignificantChanges = true
@@ -142,7 +142,6 @@ final class VisitLocationManager: NSObject {
 		switch mode {
 		case .active:
 			startUpdating()
-			requestAlwaysAuthorizationIfNeeded()
 			if isAlwaysAuthorized {
 				startSignificantLocationMonitoring()
 			}
@@ -164,7 +163,6 @@ final class VisitLocationManager: NSObject {
 			requestWhenInUseAuthorization()
 		} else if isAuthorized {
 			startUpdating()
-			requestAlwaysAuthorizationIfNeeded()
 			if isAlwaysAuthorized {
 				startSignificantLocationMonitoring()
 			}
@@ -175,6 +173,12 @@ final class VisitLocationManager: NSObject {
 		stopUpdating()
 		stopSignificantLocationMonitoring()
 	}
+
+	static func isAccurateEnough(_ location: CLLocation) -> Bool {
+		guard location.horizontalAccuracy >= 0 else { return false }
+		guard location.horizontalAccuracy <= maxHorizontalAccuracy else { return false }
+		return abs(location.timestamp.timeIntervalSinceNow) <= maxFixAge
+	}
 }
 
 extension VisitLocationManager: CLLocationManagerDelegate {
@@ -183,7 +187,6 @@ extension VisitLocationManager: CLLocationManagerDelegate {
 			authorizationStatus = manager.authorizationStatus
 			if isAuthorized {
 				startUpdating()
-				requestAlwaysAuthorizationIfNeeded()
 				if isAlwaysAuthorized {
 					startSignificantLocationMonitoring()
 				}
@@ -196,12 +199,7 @@ extension VisitLocationManager: CLLocationManagerDelegate {
 	nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
 		guard let location = locations.last else { return }
 		Task { @MainActor in
-			userLocation = location
-			userCoordinate = location.coordinate
-			lastErrorMessage = nil
-			scheduleReverseGeocode(for: location)
-			MeetupLiveActivityTracker.handleLocationUpdate(location)
-			onLocationUpdate?(location)
+			applyLocationUpdate(location)
 		}
 	}
 
@@ -213,6 +211,33 @@ extension VisitLocationManager: CLLocationManagerDelegate {
 }
 
 private extension VisitLocationManager {
+	func applyLocationUpdate(_ location: CLLocation) {
+		let accurate = Self.isAccurateEnough(location)
+		if let current = userLocation {
+			let currentAccurate = Self.isAccurateEnough(current)
+			// Keep a good fix unless the new one is also good (or clearly better).
+			if currentAccurate, !accurate {
+				return
+			}
+			if accurate,
+			   currentAccurate,
+			   location.horizontalAccuracy > current.horizontalAccuracy + 25,
+			   location.distance(from: current) < 30 {
+				return
+			}
+		} else if !accurate {
+			// Accept a first coarse/cached fix so the UI can leave "Locating…",
+			// but hasAccurateFix stays false until GPS settles.
+		}
+
+		userLocation = location
+		userCoordinate = location.coordinate
+		lastErrorMessage = nil
+		scheduleReverseGeocode(for: location)
+		MeetupLiveActivityTracker.handleLocationUpdate(location)
+		onLocationUpdate?(location)
+	}
+
 	func scheduleReverseGeocode(for location: CLLocation) {
 		if let lastGeocodedLocation,
 		   lastGeocodedLocation.distance(from: location) < 80,

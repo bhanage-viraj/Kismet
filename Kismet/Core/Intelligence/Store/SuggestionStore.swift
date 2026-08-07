@@ -23,13 +23,27 @@ final class SuggestionStore {
 	) {
 		self.cards = cards.filter { $0.presence.isSuggestionEligible }
 		self.usedFoundationModels = usedModel
-		self.statusMessage = status
+		self.statusMessage = Self.sanitizedStatus(status)
 		self.lastUpdatedAt = Date()
 		SuggestionSnapshotWriter.persist(
 			cards: self.cards,
 			updatedAt: self.lastUpdatedAt ?? Date(),
 			userCoordinate: userCoordinate
 		)
+		Task { await FriendSpotlightIndexer.reindex() }
+	}
+
+	private static func sanitizedStatus(_ status: String?) -> String? {
+		guard let status else { return nil }
+		let trimmed = status.trimmingCharacters(in: .whitespacesAndNewlines)
+		guard !trimmed.isEmpty else { return nil }
+		let lower = trimmed.lowercased()
+		if lower.contains("cancellationerror")
+			|| lower.contains("couldn't be completed")
+			|| lower.contains("could not be completed") {
+			return nil
+		}
+		return trimmed
 	}
 
 	func reset() {
@@ -38,5 +52,6 @@ final class SuggestionStore {
 		statusMessage = nil
 		usedFoundationModels = false
 		SuggestionSnapshotWriter.clear()
+		Task { await FriendSpotlightIndexer.reindex() }
 	}
 }

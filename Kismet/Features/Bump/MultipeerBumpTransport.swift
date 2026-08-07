@@ -143,7 +143,7 @@ final class MultipeerBumpTransport: NSObject {
 		let trimmed = preferred.trimmingCharacters(in: .whitespacesAndNewlines)
 		let base: String
 		if trimmed.isEmpty {
-			base = "Kismet-\(String(UUID().uuidString.prefix(4)))"
+			base = "Who's Out-\(String(UUID().uuidString.prefix(4)))"
 		} else {
 			base = trimmed
 		}

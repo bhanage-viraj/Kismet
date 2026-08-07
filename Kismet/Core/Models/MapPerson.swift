@@ -47,9 +47,19 @@ struct MapPerson: Identifiable, Hashable, Sendable {
 
 	func hash(into hasher: inout Hasher) {
 		hasher.combine(id)
+		hasher.combine(coordinate.latitude)
+		hasher.combine(coordinate.longitude)
+		hasher.combine(presenceState)
+		hasher.combine(availability)
+		hasher.combine(distanceMeters)
 	}
 
 	static func == (lhs: MapPerson, rhs: MapPerson) -> Bool {
 		lhs.id == rhs.id
+			&& lhs.coordinate.latitude == rhs.coordinate.latitude
+			&& lhs.coordinate.longitude == rhs.coordinate.longitude
+			&& lhs.presenceState == rhs.presenceState
+			&& lhs.availability == rhs.availability
+			&& abs(lhs.distanceMeters - rhs.distanceMeters) < 0.5
 	}
 }

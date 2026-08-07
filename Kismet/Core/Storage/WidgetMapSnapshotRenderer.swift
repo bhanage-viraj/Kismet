@@ -8,36 +8,53 @@ import WidgetKit
 enum WidgetMapSnapshotRenderer {
 	static let fallbackCoordinate = CLLocationCoordinate2D(latitude: 12.9352, longitude: 77.6245)
 
-	static func refresh(from snapshot: AppGroup.SuggestionSnapshot) {
-		render(snapshot: snapshot, size: .large)
-		render(snapshot: snapshot, size: .medium)
+	/// Renders medium + large, then reloads the map widget once both writes finish.
+	@discardableResult
+	static func refresh(from snapshot: AppGroup.SuggestionSnapshot) async -> Bool {
+		async let largeOK = render(snapshot: snapshot, size: .large)
+		async let mediumOK = render(snapshot: snapshot, size: .medium)
+		let (large, medium) = await (largeOK, mediumOK)
+		let any = large || medium
+		if any {
+			await MainActor.run {
+				WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.mapWidgetKind)
+			}
+		}
+		return any
 	}
 
-	private static func render(snapshot: AppGroup.SuggestionSnapshot, size: AppGroup.MapSnapshotSize) {
-		let options = MKMapSnapshotter.Options()
-		options.region = region(for: snapshot)
-		options.size = size.pointSize
-		options.mapType = .standard
-		options.showsBuildings = true
-		options.pointOfInterestFilter = .includingAll
-		options.traitCollection = UITraitCollection(traitsFrom: [
-			UITraitCollection(displayScale: UIScreen.main.scale),
-			UITraitCollection(userInterfaceStyle: UITraitCollection.current.userInterfaceStyle),
-		])
+	@discardableResult
+	private static func render(
+		snapshot: AppGroup.SuggestionSnapshot,
+		size: AppGroup.MapSnapshotSize
+	) async -> Bool {
+		await withCheckedContinuation { continuation in
+			let options = MKMapSnapshotter.Options()
+			options.region = region(for: snapshot)
+			options.size = size.pointSize
+			options.mapType = .standard
+			options.showsBuildings = true
+			options.pointOfInterestFilter = .includingAll
+			options.traitCollection = UITraitCollection(traitsFrom: [
+				UITraitCollection(displayScale: UIScreen.main.scale),
+				UITraitCollection(userInterfaceStyle: UITraitCollection.current.userInterfaceStyle),
+			])
 
-		if #available(iOS 17.0, *) {
-			let config = MKStandardMapConfiguration(elevationStyle: .flat)
-			config.pointOfInterestFilter = .includingAll
-			options.preferredConfiguration = config
-		}
+			if #available(iOS 17.0, *) {
+				let config = MKStandardMapConfiguration(elevationStyle: .flat)
+				config.pointOfInterestFilter = .includingAll
+				options.preferredConfiguration = config
+			}
 
-		let snapshotter = MKMapSnapshotter(options: options)
-		snapshotter.start(with: .global(qos: .userInitiated)) { mapSnapshot, error in
-			guard let mapSnapshot, error == nil else { return }
-			let image = compose(mapSnapshot: mapSnapshot, data: snapshot)
-			AppGroup.saveCachedMapImage(image, size: size)
-			DispatchQueue.main.async {
-				WidgetCenter.shared.reloadTimelines(ofKind: AppGroup.mapWidgetKind)
+			let snapshotter = MKMapSnapshotter(options: options)
+			snapshotter.start(with: .global(qos: .userInitiated)) { mapSnapshot, error in
+				guard let mapSnapshot, error == nil else {
+					continuation.resume(returning: false)
+					return
+				}
+				let image = compose(mapSnapshot: mapSnapshot, data: snapshot)
+				AppGroup.saveCachedMapImage(image, size: size)
+				continuation.resume(returning: true)
 			}
 		}
 	}
@@ -73,7 +90,6 @@ enum WidgetMapSnapshotRenderer {
 			longitude: (minLon + maxLon) / 2
 		)
 
-		// Convert span to meters-based region with padding so streets are readable.
 		let latMeters = max(CLLocation(latitude: minLat, longitude: center.longitude)
 			.distance(from: CLLocation(latitude: maxLat, longitude: center.longitude)), 400)
 		let lonMeters = max(CLLocation(latitude: center.latitude, longitude: minLon)

@@ -25,6 +25,7 @@ final class BackgroundProximityController {
 
 	private var handleTask: Task<Void, Never>?
 	private var lastHandledLocation: CLLocation?
+	private var isAppActive = true
 	private let minHandleInterval: TimeInterval = 45
 	private let minHandleDistance: CLLocationDistance = 40
 
@@ -49,6 +50,7 @@ final class BackgroundProximityController {
 		isEnabled = true
 		locationSharing.start()
 		NearbyFriendNotifier.requestAuthorizationIfNeeded()
+		PulseInviteNotifier.requestAuthorizationIfNeeded()
 		PushTokenRegistrar.registerForRemoteNotifications()
 
 		locationManager.onLocationUpdate = { [weak self] location in
@@ -75,12 +77,17 @@ final class BackgroundProximityController {
 		guard isEnabled else { return }
 		switch phase {
 		case .active:
+			isAppActive = true
+			AppEnvironment.shared.pulseInbox.postsNotificationsForNewPulses = false
 			locationManager.applySceneMode(.active)
 			PushTokenRegistrar.registerForRemoteNotifications()
 			if let location = locationManager.userLocation {
-				handleLocationUpdate(location, force: false)
+				// Foreground map session owns friend/blob refreshes; only re-publish location.
+				publishLocation(location, force: false)
 			}
 		case .background:
+			isAppActive = false
+			AppEnvironment.shared.pulseInbox.postsNotificationsForNewPulses = true
 			locationManager.applySceneMode(.background)
 		case .inactive:
 			break
@@ -136,6 +143,13 @@ final class BackgroundProximityController {
 	private func handleLocationUpdate(_ location: CLLocation, force: Bool = false) {
 		guard isEnabled else { return }
 
+		// While the map session is foregrounded it already polls / refreshes.
+		// Background path only publishes location and skips duplicate network work.
+		if isAppActive {
+			publishLocation(location, force: force)
+			return
+		}
+
 		if !force, let lastHandledLocation {
 			let moved = location.distance(from: lastHandledLocation)
 			let elapsed = lastProximityCheckAt.map { Date().timeIntervalSince($0) } ?? .infinity
@@ -150,6 +164,20 @@ final class BackgroundProximityController {
 		}
 	}
 
+	private func publishLocation(_ location: CLLocation, force: Bool) {
+		if friendsStore.friends.isEmpty {
+			Task { await friendsStore.refresh() }
+		}
+		locationSharing.shareIfNeeded(
+			location: location,
+			senderUserId: KeychainStore.get(.userId),
+			friends: friendsStore.friends,
+			presence: presenceMode.state,
+			friendsOnlyVisibleIds: friendsOnlyVisibility.visibleFriendIds,
+			force: force
+		)
+	}
+
 	private func publishAndCheckProximity(location: CLLocation, force: Bool) async {
 		guard !Task.isCancelled, isEnabled else { return }
 
@@ -157,16 +185,7 @@ final class BackgroundProximityController {
 			await friendsStore.refresh()
 		}
 
-		let senderUserId = KeychainStore.get(.userId)
-		locationSharing.shareIfNeeded(
-			location: location,
-			senderUserId: senderUserId,
-			friends: friendsStore.friends,
-			presence: presenceMode.state,
-			friendsOnlyVisibleIds: friendsOnlyVisibility.visibleFriendIds,
-			force: force
-		)
-
+		publishLocation(location, force: force)
 		_ = await refreshAndNotify(origin: location)
 	}
 

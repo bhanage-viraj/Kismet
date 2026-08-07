@@ -22,7 +22,7 @@ struct DraftPulseIntent: AppIntent {
 		}
 
 		guard let card else {
-			return .result(dialog: "I couldn't find a friend to draft a Pulse for. Open Kismet to refresh suggestions first.")
+			return .result(dialog: "I couldn't find a friend to draft a Pulse for. Open Who's Out to refresh suggestions first.")
 		}
 
 		let message = await MainActor.run { () -> String in
@@ -50,7 +50,7 @@ struct DraftPulseIntent: AppIntent {
 		if let venue = card.venueName {
 			dialog += " near \(venue)"
 		}
-		dialog += ": \"\(message)\". Say Confirm Pulse in Kismet to send it."
+		dialog += ": \"\(message)\". Say Confirm Pulse in Who's Out to send it."
 		return .result(dialog: IntentDialog(stringLiteral: dialog))
 	}
 }

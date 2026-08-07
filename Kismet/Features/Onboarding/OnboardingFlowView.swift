@@ -2,7 +2,8 @@ import SwiftUI
 
 struct OnboardingFlowView: View {
 	@Environment(AuthSession.self) private var authSession
-	@State private var step: Step = .splash
+	/// Skip the animated splash when we already showed it during bootstrap restore.
+	@State private var step: Step = .howItWorks
 
 	var body: some View {
 		ZStack {
@@ -41,10 +42,20 @@ struct OnboardingFlowView: View {
 					if authSession.isSigningIn {
 						ZStack {
 							Color.black.opacity(0.25).ignoresSafeArea()
-							ProgressView()
-								.controlSize(.large)
-								.padding(24)
-								.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
+							VStack(spacing: 14) {
+								ProgressView()
+									.controlSize(.large)
+								Text("Connecting…")
+									.font(.subheadline.weight(.semibold))
+									.foregroundStyle(.primary)
+								Text("The server may take a moment to wake up.")
+									.font(.caption)
+									.foregroundStyle(.secondary)
+									.multilineTextAlignment(.center)
+							}
+							.padding(24)
+							.frame(maxWidth: 260)
+							.background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
 						}
 					}
 				}

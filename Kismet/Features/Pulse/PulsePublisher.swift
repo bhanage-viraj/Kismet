@@ -37,6 +37,18 @@ final class PulsePublisher {
 		senderUserId: String?,
 		friends: [FriendSummaryDTO]
 	) async throws -> OutgoingPulse {
+		try await send(
+			draft: .from(card: suggestion),
+			senderUserId: senderUserId,
+			friends: friends
+		)
+	}
+
+	func send(
+		draft: PulseComposeDraft,
+		senderUserId: String?,
+		friends: [FriendSummaryDTO]
+	) async throws -> OutgoingPulse {
 		guard let senderUserId, !senderUserId.isEmpty else {
 			throw PulsePublisherError.missingUser
 		}
@@ -52,16 +64,18 @@ final class PulsePublisher {
 		let expiresAt = Date().addingTimeInterval(45 * 60)
 		let payload = PulsePayloadDTO(
 			pulseId: UUID().uuidString,
-			emoji: "👋",
-			label: suggestion.ctaTitle,
+			emoji: draft.activity.emoji,
+			label: title.isEmpty ? draft.activity.defaultTitle : title,
 			expiresAt: expiresAt,
-			venueName: suggestion.venueName,
-			createdAt: Date()
+			venueName: venue.isEmpty ? nil : venue,
+			createdAt: Date(),
+			venueAddress: address.isEmpty ? nil : address,
+			startsAt: startsAt,
+			activityId: draft.activity.rawValue
 		)
 
-		// Target the suggested friend if they have a public key; otherwise no-op.
 		let recipients = friends.filter { friend in
-			friend.userId == suggestion.friendID
+			friend.userId == draft.recipientUserId
 				&& friend.publicKey?.isEmpty == false
 		}
 		guard !recipients.isEmpty else {
