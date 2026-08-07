@@ -30,7 +30,7 @@ struct WhosFreeNearbyIntent: AppIntent {
 
 struct WhosNearbyIntent: AppIntent {
 	static var title: LocalizedStringResource = "Who's Nearby"
-	static var description = IntentDescription("Lists nearby friends surfaced by Kismet Intelligence.")
+	static var description = IntentDescription("Lists nearby friends surfaced by Who's Out Intelligence.")
 
 	func perform() async throws -> some IntentResult & ProvidesDialog {
 		let cards = await MainActor.run {
@@ -47,51 +47,28 @@ struct WhosNearbyIntent: AppIntent {
 
 struct StartPulseIntent: AppIntent {
 	static var title: LocalizedStringResource = "Start a Pulse"
-	static var description = IntentDescription("Sends a lightweight Pulse to a nearby friend.")
+	static var description = IntentDescription("Sends a Pulse to a nearby friend.")
 	static var openAppWhenRun = true
 
 	@Parameter(title: "Friend")
 	var friend: FriendEntity?
 
 	func perform() async throws -> some IntentResult & ProvidesDialog {
-		let env = AppEnvironment.shared
-		let card: SuggestionCard? = await MainActor.run {
-			let cards = env.suggestionEngine.store.cards.filter(\.presence.isSuggestionEligible)
-			if let friend {
-				return cards.first { $0.friendID == friend.id }
-			}
-			return cards.first
-		}
+		let dialog = try await PulseSiriActions.performPulse(friend: friend, plural: false)
+		return .result(dialog: dialog)
+	}
+}
 
-		guard let card else {
-			return .result(dialog: "I couldn't find a friend to Pulse.")
-		}
+/// Plural “Pulse them” — sends to up to a few nearby free friends.
+struct PulseThemIntent: AppIntent {
+	static var title: LocalizedStringResource = "Pulse Them"
+	static var description = IntentDescription(
+		"Sends a Pulse to nearby free friends (up to three)."
+	)
+	static var openAppWhenRun = true
 
-		do {
-			_ = try await env.pulsePublisher.send(
-				from: card,
-				senderUserId: KeychainStore.get(.userId),
-				friends: await MainActor.run { env.friendsStore.friends }
-			)
-			await MainActor.run {
-				env.meetupMemoryStore.recordFeedback(
-					friendUserId: card.friendID,
-					action: .cta,
-					reasonCodes: card.reasonCodes.map(\.rawValue)
-				)
-				env.meetupMemoryStore.recordMeetup(
-					friendUserId: card.friendID,
-					friendDisplayName: card.displayName,
-					venueName: card.venueName,
-					source: .pulse,
-					outcome: .pending
-				)
-				env.pendingPulseDraft = nil
-			}
-			return .result(dialog: "Pulse sent to \(card.displayName).")
-		} catch {
-			let message = (error as? LocalizedError)?.errorDescription ?? "Couldn't send that Pulse."
-			return .result(dialog: IntentDialog(stringLiteral: message))
-		}
+	func perform() async throws -> some IntentResult & ProvidesDialog {
+		let dialog = try await PulseSiriActions.performPulse(plural: true)
+		return .result(dialog: dialog)
 	}
 }

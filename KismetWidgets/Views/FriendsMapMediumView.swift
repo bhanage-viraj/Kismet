@@ -49,7 +49,7 @@ struct FriendsMapMediumView: View {
 				HStack(spacing: 8) {
 					Image(systemName: "map.fill")
 						.foregroundStyle(.secondary)
-					Text("Open Kismet to load the map")
+					Text("Open Who's Out to load the map")
 						.font(.caption2)
 						.foregroundStyle(.secondary)
 				}

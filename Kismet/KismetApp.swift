@@ -5,6 +5,7 @@
 //  Created by Viraj Bhanage on 29/07/26.
 //
 
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -23,8 +24,6 @@ struct KismetApp: App {
 	@State private var suggestionEngine = AppEnvironment.shared.suggestionEngine
 	@State private var pulsePublisher = AppEnvironment.shared.pulsePublisher
 	@State private var pulseInbox = AppEnvironment.shared.pulseInbox
-	@State private var mapWeather = AppEnvironment.shared.mapWeather
-	@State private var weatherObstacles = AppEnvironment.shared.weatherObstacles
 	@State private var meetupMemoryStore = AppEnvironment.shared.meetupMemoryStore
 	@State private var interestSuggestionStore = AppEnvironment.shared.interestSuggestionStore
 	@State private var presenceMode = AppEnvironment.shared.presenceMode
@@ -44,8 +43,6 @@ struct KismetApp: App {
 				.environment(suggestionEngine)
 				.environment(pulsePublisher)
 				.environment(pulseInbox)
-				.environment(mapWeather)
-				.environment(weatherObstacles)
 				.environment(meetupMemoryStore)
 				.environment(interestSuggestionStore)
 				.environment(presenceMode)
@@ -53,11 +50,13 @@ struct KismetApp: App {
 				.task {
 					await authSession.restore()
 					syncBackgroundProximity()
+					// Register / refresh Siri App Shortcut phrases after install & updates.
+					WhosOutShortcuts.updateAppShortcutParameters()
 					// Warm Friends Map from real App Group data, or an empty location-only map.
 					if let snapshot = AppGroup.loadSnapshot() {
-						WidgetMapSnapshotRenderer.refresh(from: snapshot)
+						await WidgetMapSnapshotRenderer.refresh(from: snapshot)
 					} else {
-						SuggestionSnapshotWriter.persistEmptyMap(
+						await SuggestionSnapshotWriter.persistEmptyMap(
 							userCoordinate: locationManager.userCoordinate
 						)
 					}

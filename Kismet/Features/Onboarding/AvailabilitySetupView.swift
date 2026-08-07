@@ -158,7 +158,7 @@ struct AvailabilitySetupView: View {
 				.font(.system(size: 36, weight: .bold, design: .rounded))
 				.foregroundStyle(foregroundColor)
 
-			Text("Kismet first marks your calendar events as busy in orange. Then you can add your free hours in green.")
+			Text("Who's Out first marks your calendar events as busy in orange. Then you can add your free hours in green.")
 				.font(.body)
 				.foregroundStyle(foregroundColor.opacity(0.76))
 				.fixedSize(horizontal: false, vertical: true)

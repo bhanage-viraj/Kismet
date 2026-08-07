@@ -104,7 +104,7 @@ struct SocialDayLargeView: View {
 				.foregroundStyle(PresenceStatusColor.free)
 				.widgetAccentable()
 			Spacer(minLength: 0)
-			Text("Open Kismet when friends are around")
+			Text("Open Who's Out when friends are around")
 				.font(.caption)
 				.foregroundStyle(.secondary)
 		}

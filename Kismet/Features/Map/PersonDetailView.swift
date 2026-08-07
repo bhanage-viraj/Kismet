@@ -6,7 +6,6 @@ struct PersonDetailView: View {
 	let person: MapPerson
 	var onClose: () -> Void = {}
 	var onSayHi: () -> Void = {}
-	var onMessage: () -> Void = {}
 	var onWeMet: () -> Void = {}
 
 	private var cardFill: Color {
@@ -140,31 +139,16 @@ struct PersonDetailView: View {
 
 	private var actionRow: some View {
 		VStack(spacing: 10) {
-			HStack(spacing: 12) {
-				Button(action: onSayHi) {
-					Text("Say Hi")
-						.font(.headline)
-						.frame(maxWidth: .infinity)
-						.padding(.vertical, 16)
-						.foregroundStyle(primaryButtonForeground)
-						.background(primaryButtonFill, in: Capsule())
-				}
-				.buttonStyle(.plain)
-
-				Button(action: onMessage) {
-					Image(systemName: "bubble.left.fill")
-						.font(.body.weight(.semibold))
-						.foregroundStyle(.primary)
-						.frame(width: 54, height: 54)
-						.background(
-							Circle()
-								.strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
-								.background(Circle().fill(cardFill))
-						)
-				}
-				.buttonStyle(.plain)
-				.accessibilityLabel("Message")
+			Button(action: onSayHi) {
+				Text("Say Hi")
+					.font(.headline)
+					.frame(maxWidth: .infinity)
+					.padding(.vertical, 16)
+					.foregroundStyle(primaryButtonForeground)
+					.background(primaryButtonFill, in: Capsule())
 			}
+			.buttonStyle(.plain)
+			.accessibilityHint("Compose a Pulse invitation for this friend")
 
 			Button(action: onWeMet) {
 				Label("We met", systemImage: "checkmark.circle.fill")
@@ -175,7 +159,7 @@ struct PersonDetailView: View {
 					.background(KismetTheme.Status.free.opacity(0.14), in: Capsule())
 			}
 			.buttonStyle(.plain)
-			.accessibilityHint("Teaches Kismet that you hung out, so suggestions improve")
+			.accessibilityHint("Teaches Who's Out that you hung out, so suggestions improve")
 		}
 	}
 

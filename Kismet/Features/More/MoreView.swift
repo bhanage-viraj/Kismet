@@ -37,6 +37,14 @@ struct MoreView: View {
 						}
 					}
 				}
+
+				NavigationLink {
+					BumpFlowView()
+						.navigationTitle("Add nearby")
+						.navigationBarTitleDisplayMode(.inline)
+				} label: {
+					Label("Add nearby friend", systemImage: "wave.3.right")
+				}
 			}
 
 			Section("Account") {

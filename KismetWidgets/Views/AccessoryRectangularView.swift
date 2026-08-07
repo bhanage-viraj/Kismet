@@ -92,7 +92,7 @@ struct FriendStatusRectangularView: View {
 					.font(.headline.weight(.semibold))
 					.foregroundStyle(.primary)
 					.lineLimit(1)
-				Text("Open Kismet for live suggestions")
+				Text("Open Who's Out for live suggestions")
 					.font(.caption2)
 					.foregroundStyle(.secondary)
 					.lineLimit(2)

@@ -35,7 +35,7 @@ struct AuthView: View {
 							.fontWeight(.semibold)
 							.foregroundStyle(foregroundColor.opacity(0.82))
 
-						Text("indeKismet")
+						Text("Who's Out")
 							.font(.system(size: 52, weight: .bold, design: .rounded))
 							.tracking(1)
 							.foregroundStyle(foregroundColor)

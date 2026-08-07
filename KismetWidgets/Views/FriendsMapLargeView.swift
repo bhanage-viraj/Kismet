@@ -51,7 +51,7 @@ struct FriendsMapLargeView: View {
 					Image(systemName: "map.fill")
 						.font(.title3)
 						.foregroundStyle(.secondary)
-					Text("Open Kismet to load the map")
+					Text("Open Who's Out to load the map")
 						.font(.caption2)
 						.foregroundStyle(.secondary)
 						.multilineTextAlignment(.center)

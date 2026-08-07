@@ -7,7 +7,6 @@ struct SocialMapView: View {
 	@Environment(PresenceModeStore.self) private var presenceMode
 
 	@Binding var cameraPosition: MapCameraPosition
-	var showsRadarRings: Bool = true
 
 	private var center: CLLocationCoordinate2D {
 		locationManager.displayCoordinate
@@ -17,25 +16,18 @@ struct SocialMapView: View {
 		Binding(
 			get: { friendsStore.selectedFriendID },
 			set: { newValue in
-				// Defer store writes so MapKit isn't mid-update when Observation fires.
-				Task { @MainActor in
-					friendsStore.select(newValue)
-				}
+				friendsStore.select(newValue)
 			}
 		)
 	}
 
 	var body: some View {
 		Map(position: $cameraPosition, selection: selectionBinding) {
-			if showsRadarRings {
-				radarRings
-			}
-
 			selfAnnotationContent
 
 			ForEach(friendsStore.friends) { friend in
 				Annotation(
-					friend.displayName,
+					"",
 					coordinate: friend.coordinate,
 					anchor: .bottom
 				) {
@@ -50,33 +42,19 @@ struct SocialMapView: View {
 		.mapStyle(.standard(elevation: .flat, emphasis: .muted, pointsOfInterest: .excludingAll))
 		.mapControls {
 			MapCompass()
+			MapUserLocationButton()
 		}
-	}
-
-	@MapContentBuilder
-	private var radarRings: some MapContent {
-		MapCircle(center: center, radius: 40)
-			.foregroundStyle(KismetTheme.Map.userPulse.opacity(0.10))
-			.stroke(KismetTheme.Map.userPulse.opacity(0.25), lineWidth: 1)
-
-		MapCircle(center: center, radius: 80)
-			.foregroundStyle(KismetTheme.Map.userPulse.opacity(0.06))
-			.stroke(KismetTheme.Map.ringStroke, lineWidth: 1)
-
-		MapCircle(center: center, radius: 130)
-			.foregroundStyle(KismetTheme.Map.userPulse.opacity(0.03))
-			.stroke(KismetTheme.Map.ringStroke, lineWidth: 1)
 	}
 
 	@MapContentBuilder
 	private var selfAnnotationContent: some MapContent {
 		if locationManager.isAuthorized, locationManager.hasFix {
 			UserAnnotation()
-			Annotation("You", coordinate: center, anchor: .top) {
+			Annotation("", coordinate: center, anchor: .top) {
 				YouPresenceMarker(presence: presenceMode.state, showsDot: false)
 			}
 		} else {
-			Annotation("You", coordinate: center, anchor: .bottom) {
+			Annotation("", coordinate: center, anchor: .bottom) {
 				YouPresenceMarker(presence: presenceMode.state, showsDot: true)
 			}
 		}
@@ -97,9 +75,11 @@ private struct FriendMapAnnotationView: View {
 		VStack(spacing: 6) {
 			ZStack {
 				Circle()
-					.fill(ringColor.opacity(0.35))
-					.frame(width: 78, height: 78)
-					.blur(radius: 8)
+					.fill(ringColor.opacity(0.22))
+					.frame(
+						width: KismetTheme.Chrome.annotationAvatarSize + 14,
+						height: KismetTheme.Chrome.annotationAvatarSize + 14
+					)
 
 				Circle()
 					.stroke(ringColor, lineWidth: isSelected ? 3.5 : 2.5)

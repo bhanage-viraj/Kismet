@@ -1,6 +1,40 @@
 import MapKit
 import SwiftUI
 
+/// Find My–style persistent sheet heights over the map.
+private enum SuggestionsSheetDetent: Int, CaseIterable, Comparable {
+	case peek
+	case medium
+	case expanded
+
+	static func < (lhs: SuggestionsSheetDetent, rhs: SuggestionsSheetDetent) -> Bool {
+		lhs.rawValue < rhs.rawValue
+	}
+
+	func height(in container: CGFloat) -> CGFloat {
+		switch self {
+		case .peek: 78
+		case .medium: min(340, container * 0.42)
+		case .expanded: min(560, container * 0.72)
+		}
+	}
+
+	func advancing(by translation: CGFloat) -> SuggestionsSheetDetent {
+		// Negative translation = drag up = expand.
+		if translation < -48 { return next }
+		if translation > 48 { return previous }
+		return self
+	}
+
+	var next: SuggestionsSheetDetent {
+		SuggestionsSheetDetent(rawValue: rawValue + 1) ?? self
+	}
+
+	var previous: SuggestionsSheetDetent {
+		SuggestionsSheetDetent(rawValue: rawValue - 1) ?? self
+	}
+}
+
 struct MapHomeView: View {
 	@Environment(\.colorScheme) private var colorScheme
 	@Environment(AuthSession.self) private var authSession
@@ -13,9 +47,10 @@ struct MapHomeView: View {
 	@Environment(SuggestionEngine.self) private var suggestionEngine
 	@Environment(MeetupMemoryStore.self) private var meetupMemoryStore
 	@Environment(InterestSuggestionStore.self) private var interestSuggestionStore
-	@Environment(MapWeatherController.self) private var mapWeather
 	@Environment(PresenceModeStore.self) private var presenceMode
 	@Environment(PulseInboxStore.self) private var pulseInbox
+
+	@Binding var composeDraft: PulseComposeDraft?
 
 	@State private var cameraPosition: MapCameraPosition = .region(
 		MKCoordinateRegion(
@@ -25,9 +60,12 @@ struct MapHomeView: View {
 		)
 	)
 	@State private var ctaToast: String?
-	@State private var didCenterOnUser = false
+	@State private var didCenterOnAccurateFix = false
 	@State private var isPresencePickerExpanded = false
 	@State private var presentedPulse: IncomingPulse?
+	@State private var suggestionsDetent: SuggestionsSheetDetent = .peek
+	@State private var suggestionsDragOffset: CGFloat = 0
+	@State private var recordedShownCardIDs: Set<String> = []
 
 	private var displayName: String {
 		authSession.preferredDisplayName
@@ -41,6 +79,14 @@ struct MapHomeView: View {
 		friendsStore.selectedFriend == nil
 	}
 
+	private var suggestionCards: [SuggestionCard] {
+		suggestionEngine.store.cards
+	}
+
+	private var featuredSuggestion: SuggestionCard? {
+		suggestionCards.first
+	}
+
 	var body: some View {
 		@Bindable var presenceMode = presenceMode
 
@@ -51,12 +97,38 @@ struct MapHomeView: View {
 			VStack(spacing: 10) {
 				header
 					.padding(.horizontal, 16)
-					.trackWeatherObstacle("map.header", cornerRadius: KismetTheme.Chrome.headerCornerRadius)
+
+				if friendsStore.isLoading, friendsStore.friends.isEmpty, friendsStore.selectedFriend == nil {
+					HStack(spacing: 8) {
+						ProgressView()
+							.controlSize(.small)
+						Text("Finding friends nearby…")
+							.font(.caption.weight(.semibold))
+							.foregroundStyle(.secondary)
+					}
+					.padding(.horizontal, 14)
+					.padding(.vertical, 8)
+					.background(.ultraThinMaterial, in: Capsule())
+					.padding(.horizontal, 16)
+					.transition(.opacity)
+				}
+
+				if let error = friendsStore.lastErrorMessage,
+				   friendsStore.friends.isEmpty,
+				   friendsStore.selectedFriend == nil {
+					Text(error)
+						.font(.caption.weight(.medium))
+						.foregroundStyle(.secondary)
+						.padding(.horizontal, 14)
+						.padding(.vertical, 8)
+						.background(.ultraThinMaterial, in: Capsule())
+						.padding(.horizontal, 16)
+						.transition(.opacity)
+				}
 
 				if locationManager.isDenied, friendsStore.selectedFriend == nil {
 					locationDeniedBanner
 						.padding(.horizontal, 16)
-						.trackWeatherObstacle("map.locationBanner", cornerRadius: 16)
 						.transition(.move(edge: .top).combined(with: .opacity))
 				}
 
@@ -67,7 +139,6 @@ struct MapHomeView: View {
 						onDismiss: { Task { await pulseInbox.acknowledge(pulse) } }
 					)
 					.padding(.horizontal, 16)
-					.trackWeatherObstacle("map.pulseInbox", cornerRadius: 16)
 					.transition(.move(edge: .top).combined(with: .opacity))
 					.onTapGesture { presentedPulse = pulse }
 				}
@@ -91,10 +162,8 @@ struct MapHomeView: View {
 						friendsStore.clearSelection()
 					},
 					onSayHi: {
-						showToast("Say Hi to \(selected.displayName) — coming soon")
-					},
-					onMessage: {
-						showToast("Message \(selected.displayName) — coming soon")
+						composeDraft = .from(person: selected)
+						friendsStore.clearSelection()
 					},
 					onWeMet: {
 						meetupMemoryStore.markCompleted(
@@ -106,15 +175,28 @@ struct MapHomeView: View {
 					}
 				)
 				.padding(.horizontal, 18)
-				.trackWeatherObstacle("map.personDetail", cornerRadius: 28)
-				// Clear the floating tab pill; card layout/spacing stays unchanged.
-				.padding(.bottom, 100)
+				// Map ignores safe area; keep the card above the system liquid-glass tab bar.
+				.padding(.bottom, 8)
+				.safeAreaPadding(.bottom, 8)
 				.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
 				.transition(.move(edge: .bottom).combined(with: .opacity))
 				.zIndex(2)
 			}
 		}
+		// Find My pattern: persistent suggestions sheet floats above the shared
+		// system tab bar. Peek on launch → drag up for the full sheet.
+		.overlay(alignment: .bottom) {
+			if showsFloatingMapChrome {
+				suggestionsFindMySheet
+					.frame(height: suggestionsPanelHeight, alignment: .top)
+					.padding(.horizontal, 10)
+					.padding(.bottom, 8)
+					.transition(.move(edge: .bottom).combined(with: .opacity))
+			}
+		}
 		.animation(.spring(response: 0.34, dampingFraction: 0.86), value: friendsStore.selectedFriendID)
+		.animation(.snappy, value: showsFloatingMapChrome)
+		.animation(.snappy, value: suggestionsDetent)
 		.sheet(item: $presentedPulse) { pulse in
 			PulseInviteDetailView(
 				pulse: pulse,
@@ -148,24 +230,33 @@ struct MapHomeView: View {
 		.task {
 			await runMapSession()
 		}
-		.onChange(of: locationManager.hasFix) { _, hasFix in
-			guard hasFix, !didCenterOnUser else { return }
-			recenter(on: locationManager.displayCoordinate)
-			Task { await friendsStore.refresh(around: locationManager.displayCoordinate) }
-			Task { await mapWeather.refreshIfNeeded(at: locationManager.displayCoordinate) }
-			publishLocation(force: true)
-			didCenterOnUser = true
+		.onChange(of: locationManager.hasAccurateFix) { _, hasAccurateFix in
+			guard hasAccurateFix else { return }
+			centerOnUserIfNeeded(force: !didCenterOnAccurateFix)
 		}
 		.onChange(of: locationManager.userLocation?.timestamp) { _, _ in
 			publishLocation(force: false)
+			if locationManager.hasAccurateFix, !didCenterOnAccurateFix {
+				centerOnUserIfNeeded(force: true)
+			}
 		}
 		.onChange(of: pairedFriends.graphRevision) { _, _ in
 			publishLocation(force: true)
-			Task { await friendsStore.refresh(around: locationManager.displayCoordinate) }
+			Task {
+				await friendsStore.refresh(
+					around: locationManager.displayCoordinate,
+					friendSummaries: pairedFriends.friends
+				)
+				await refreshSuggestions()
+			}
 		}
 		.onChange(of: friendsStore.selectedFriendID) { _, selectedID in
 			if selectedID != nil {
-				withAnimation(.snappy) { isPresencePickerExpanded = false }
+				withAnimation(.snappy) {
+					isPresencePickerExpanded = false
+					suggestionsDetent = .peek
+					suggestionsDragOffset = 0
+				}
 			}
 		}
 		.onChange(of: presenceMode.state) { _, _ in
@@ -179,12 +270,297 @@ struct MapHomeView: View {
 					.padding(.horizontal, 14)
 					.padding(.vertical, 10)
 					.background(.ultraThinMaterial, in: Capsule())
-					.trackWeatherObstacle("map.toast", cornerRadius: .infinity)
 					.padding(.top, 72)
 					.transition(.move(edge: .top).combined(with: .opacity))
 			}
 		}
 		.animation(.snappy, value: ctaToast)
+	}
+
+	private var suggestionsPanelHeight: CGFloat {
+		let screen = UIScreen.main.bounds.height
+		let base = suggestionsDetent.height(in: screen)
+		return max(72, base - suggestionsDragOffset)
+	}
+
+	// MARK: - Find My suggestions sheet
+
+	private var suggestionsFindMySheet: some View {
+		VStack(spacing: 0) {
+			suggestionsGrabber
+				.gesture(suggestionsDragGesture)
+
+			if suggestionsDetent == .peek {
+				peekSuggestionsContent
+					.gesture(suggestionsDragGesture)
+			} else {
+				expandedSuggestionsContent
+			}
+		}
+		.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+		.glassEffect(.regular, in: .rect(cornerRadius: suggestionsDetent == .peek ? 28 : 34))
+	}
+
+	private var suggestionsGrabber: some View {
+		Capsule()
+			.fill(.secondary.opacity(0.45))
+			.frame(width: 36, height: 5)
+			.padding(.top, 10)
+			.padding(.bottom, suggestionsDetent == .peek ? 4 : 8)
+			.frame(maxWidth: .infinity)
+			.contentShape(Rectangle())
+			.onTapGesture {
+				let next: SuggestionsSheetDetent =
+					suggestionsDetent == .expanded ? .peek : suggestionsDetent.next
+				withAnimation(.snappy) {
+					suggestionsDetent = next
+					suggestionsDragOffset = 0
+				}
+				if next != .peek {
+					Task { await refreshSuggestionsIfStale() }
+				}
+			}
+	}
+
+	private var suggestionsDragGesture: some Gesture {
+		DragGesture(minimumDistance: 8, coordinateSpace: .local)
+			.onChanged { value in
+				// Only follow vertical drag; clamp so the panel never collapses past peek.
+				let minHeight = SuggestionsSheetDetent.peek.height(in: UIScreen.main.bounds.height)
+				let maxHeight = SuggestionsSheetDetent.expanded.height(in: UIScreen.main.bounds.height)
+				let current = suggestionsDetent.height(in: UIScreen.main.bounds.height)
+				let proposed = current - value.translation.height
+				let clamped = min(maxHeight, max(minHeight, proposed))
+				suggestionsDragOffset = current - clamped
+			}
+			.onEnded { value in
+				let next = suggestionsDetent.advancing(by: value.translation.height)
+				withAnimation(.snappy) {
+					suggestionsDetent = next
+					suggestionsDragOffset = 0
+				}
+				if next != .peek {
+					Task { await refreshSuggestionsIfStale() }
+				}
+			}
+	}
+
+	@ViewBuilder
+	private var peekSuggestionsContent: some View {
+		if let card = featuredSuggestion {
+			featuredSuggestionBar(card)
+		} else {
+			emptySuggestionsBar
+		}
+	}
+
+	private var expandedSuggestionsContent: some View {
+		VStack(spacing: 0) {
+			HStack {
+				Text("Suggestions")
+					.font(.title2.weight(.bold))
+				Spacer(minLength: 0)
+			}
+			.padding(.horizontal, 20)
+			.padding(.bottom, 8)
+
+			AIContextInsightsView(
+				cards: suggestionCards,
+				statusMessage: suggestionEngine.store.statusMessage,
+				interestSuggestions: interestSuggestionStore.pending,
+				showsHeader: false,
+				onSelectFriend: { card in
+					withAnimation(.snappy) { suggestionsDetent = .peek }
+					friendsStore.select(card.friendID)
+				},
+				onCTA: { card in
+					withAnimation(.snappy) { suggestionsDetent = .peek }
+					composeDraft = .from(card: card)
+				},
+				onDismiss: { card in
+					recordSuggestionFeedback(card, action: .dismissed)
+					suggestionEngine.store.replace(
+						cards: suggestionCards.filter { $0.id != card.id },
+						usedModel: suggestionEngine.store.usedFoundationModels,
+						status: suggestionEngine.store.statusMessage,
+						userCoordinate: locationManager.userCoordinate
+					)
+					showToast("Dismissed \(card.displayName)")
+				},
+				onFeedback: { card, action in
+					recordSuggestionFeedback(card, action: action)
+					showToast(action == .up ? "Thanks — noted" : "Got it — will tune suggestions")
+				},
+				onAppearCard: { card in
+					guard !recordedShownCardIDs.contains(card.id) else { return }
+					recordedShownCardIDs.insert(card.id)
+					recordSuggestionFeedback(card, action: .shown)
+				},
+				onAcceptInterest: { interestID in
+					Task { await acceptInterestSuggestion(interestID) }
+				},
+				onDismissInterest: { interestID in
+					interestSuggestionStore.dismiss(interestID)
+				}
+			)
+		}
+	}
+
+	private func featuredSuggestionBar(_ card: SuggestionCard) -> some View {
+		HStack(spacing: 12) {
+			Button {
+				withAnimation(.snappy) { suggestionsDetent = .medium }
+				Task { await refreshSuggestionsIfStale() }
+			} label: {
+				HStack(spacing: 10) {
+					Image(systemName: "person.crop.circle.fill")
+						.resizable()
+						.scaledToFit()
+						.foregroundStyle(.white)
+						.padding(6)
+						.frame(width: 36, height: 36)
+						.background(
+							KismetTheme.Map.ring(for: card.availability).gradient,
+							in: Circle()
+						)
+
+					VStack(alignment: .leading, spacing: 2) {
+						Text("\(card.displayName), \(card.formattedDistance)")
+							.font(.subheadline.weight(.semibold))
+							.foregroundStyle(.primary)
+							.lineLimit(1)
+
+						Text(featuredSubtitle(for: card))
+							.font(.caption2)
+							.foregroundStyle(.secondary)
+							.lineLimit(1)
+					}
+
+					Spacer(minLength: 0)
+				}
+				.contentShape(Rectangle())
+			}
+			.buttonStyle(.plain)
+			.accessibilityLabel("Expand suggestions for \(card.displayName)")
+
+			Button {
+				composeDraft = .from(card: card)
+			} label: {
+				HStack(spacing: 5) {
+					Image(systemName: card.ctaSystemImage)
+						.font(.caption.weight(.semibold))
+					Text(card.ctaTitle)
+						.font(.caption.weight(.semibold))
+						.lineLimit(1)
+				}
+				.padding(.horizontal, 12)
+				.padding(.vertical, 10)
+				.foregroundStyle(KismetTheme.Insight.ctaForeground(for: card.availability))
+				.background(
+					KismetTheme.Insight.ctaBackground(for: card.availability),
+					in: Capsule()
+				)
+			}
+			.buttonStyle(.plain)
+			.fixedSize(horizontal: true, vertical: false)
+			.accessibilityLabel(card.ctaTitle)
+		}
+		.padding(.horizontal, 16)
+		.padding(.bottom, 12)
+		.frame(maxWidth: .infinity, minHeight: 52)
+	}
+
+	private var emptySuggestionsBar: some View {
+		Button {
+			withAnimation(.snappy) { suggestionsDetent = .medium }
+			Task { await refreshSuggestionsIfStale() }
+		} label: {
+			HStack(spacing: 10) {
+				ZStack {
+					Image(systemName: "sparkles")
+						.font(.subheadline.weight(.semibold))
+						.foregroundStyle(KismetTheme.Status.free)
+						.opacity(suggestionEngine.store.isRefreshing ? 0 : 1)
+					if suggestionEngine.store.isRefreshing {
+						ProgressView()
+							.controlSize(.small)
+					}
+				}
+				.frame(width: 18, height: 18)
+
+				VStack(alignment: .leading, spacing: 2) {
+					Text("Suggestions")
+						.font(.subheadline.weight(.semibold))
+						.foregroundStyle(.primary)
+
+					Text(emptySuggestionsSubtitle)
+						.font(.caption2)
+						.foregroundStyle(.secondary)
+						.lineLimit(1)
+				}
+
+				Spacer(minLength: 0)
+
+				Image(systemName: "chevron.up")
+					.font(.caption.weight(.bold))
+					.foregroundStyle(.tertiary)
+			}
+			.padding(.horizontal, 16)
+			.padding(.bottom, 12)
+			.frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+			.contentShape(Rectangle())
+		}
+		.buttonStyle(.plain)
+		.accessibilityLabel("Expand Suggestions")
+		.accessibilityHint(emptySuggestionsSubtitle)
+	}
+
+	private var emptySuggestionsSubtitle: String {
+		if suggestionEngine.store.isRefreshing {
+			return "Looking nearby…"
+		}
+		return suggestionEngine.store.statusMessage ?? "Nothing nearby right now"
+	}
+
+	private func featuredSubtitle(for card: SuggestionCard) -> String {
+		let chips = card.factChips.prefix(3)
+		if chips.isEmpty {
+			return card.reason
+		}
+		return chips.joined(separator: " · ")
+	}
+
+	private func recordSuggestionFeedback(_ card: SuggestionCard, action: SuggestionFeedbackAction) {
+		meetupMemoryStore.recordFeedback(
+			friendUserId: card.friendID,
+			action: action,
+			reasonCodes: card.reasonCodes.map(\.rawValue)
+		)
+	}
+
+	@MainActor
+	private func refreshSuggestionsIfStale() async {
+		let last = suggestionEngine.store.lastUpdatedAt
+		let isStale = last.map { Date().timeIntervalSince($0) > 120 } ?? true
+		guard isStale || suggestionCards.isEmpty else { return }
+		await refreshSuggestions()
+	}
+
+	@MainActor
+	private func acceptInterestSuggestion(_ interestID: String) async {
+		var next = Set(authSession.user?.interests ?? [])
+		next.insert(interestID)
+		let ok = await authSession.saveInterests(Array(next).sorted())
+		if ok {
+			interestSuggestionStore.removeAccepted(interestID)
+			showToast("Added \(InterestCatalog.displayName(for: interestID))")
+			interestSuggestionStore.refresh(
+				meetups: meetupMemoryStore.meetupSnapshots(),
+				currentInterests: authSession.user?.interests ?? Array(next)
+			)
+		} else {
+			showToast("Couldn't save interest")
+		}
 	}
 
 	private var header: some View {
@@ -283,12 +659,18 @@ struct MapHomeView: View {
 			Task { @MainActor in
 				switch event.type {
 				case "blob.available":
-					await mapStore.refresh(around: locations.displayCoordinate)
+					await mapStore.refresh(
+						around: locations.displayCoordinate,
+						friendSummaries: socialStore.friends
+					)
 					await pulseInbox.refresh(friends: socialStore.friends)
 					await refreshSuggestions()
 				case "friend.pair.created":
-					await socialStore.refresh()
-					await mapStore.refresh(around: locations.displayCoordinate)
+					await socialStore.refresh(force: true)
+					await mapStore.refresh(
+						around: locations.displayCoordinate,
+						friendSummaries: socialStore.friends
+					)
 					sharing.shareIfNeeded(
 						location: locations.userLocation,
 						senderUserId: KeychainStore.get(.userId),
@@ -299,15 +681,20 @@ struct MapHomeView: View {
 					await pulseInbox.refresh(friends: socialStore.friends)
 					await refreshSuggestions()
 				case "friend.pair.revoked":
-					await socialStore.refresh()
-					await mapStore.refresh(around: locations.displayCoordinate)
+					await socialStore.refresh(force: true)
+					await mapStore.refresh(
+						around: locations.displayCoordinate,
+						friendSummaries: socialStore.friends
+					)
 					pulseInbox.reset()
 					await refreshSuggestions()
 				default:
 					await socialStore.refresh()
-					await mapStore.refresh(around: locations.displayCoordinate)
+					await mapStore.refresh(
+						around: locations.displayCoordinate,
+						friendSummaries: socialStore.friends
+					)
 					await pulseInbox.refresh(friends: socialStore.friends)
-					await refreshSuggestions()
 				}
 			}
 		}
@@ -325,9 +712,10 @@ struct MapHomeView: View {
 		await bootstrapMap()
 		guard !Task.isCancelled else { return }
 
+		// Light poll: friends + pulses only. Suggestions refresh on events / sheet expand.
 		while !Task.isCancelled {
 			do {
-				try await Task.sleep(for: .seconds(30))
+				try await Task.sleep(for: .seconds(45))
 			} catch {
 				break
 			}
@@ -340,15 +728,21 @@ struct MapHomeView: View {
 	private func bootstrapMap() async {
 		locationManager.prepareForMapAppearance()
 		await pairedFriends.refresh()
-		await friendsStore.refresh(around: locationManager.displayCoordinate)
+		guard !Task.isCancelled else { return }
+
+		// One map refresh using the friend list we just loaded — avoids a second
+		// `/friends` round-trip and the old duplicate refresh after a 50ms sleep.
+		await friendsStore.refresh(
+			around: locationManager.displayCoordinate,
+			friendSummaries: pairedFriends.friends
+		)
 		await pulseInbox.refresh(friends: pairedFriends.friends)
 		await processPendingWidgetPulseAccept()
 
-		try? await Task.sleep(for: .milliseconds(50))
 		guard !Task.isCancelled else { return }
-		recenter(on: locationManager.displayCoordinate)
-		await friendsStore.refresh(around: locationManager.displayCoordinate)
-		await mapWeather.refreshIfNeeded(at: locationManager.displayCoordinate)
+		if locationManager.hasAccurateFix {
+			centerOnUserIfNeeded(force: true)
+		}
 		publishLocation(force: true)
 		await refreshSuggestions()
 	}
@@ -365,9 +759,11 @@ struct MapHomeView: View {
 
 	private func refreshMapData() async {
 		await pairedFriends.refresh()
-		await friendsStore.refresh(around: locationManager.displayCoordinate)
+		await friendsStore.refresh(
+			around: locationManager.displayCoordinate,
+			friendSummaries: pairedFriends.friends
+		)
 		await pulseInbox.refresh(friends: pairedFriends.friends)
-		await refreshSuggestions()
 	}
 
 	@MainActor
@@ -449,6 +845,20 @@ struct MapHomeView: View {
 		)
 	}
 
+	private func centerOnUserIfNeeded(force: Bool) {
+		guard locationManager.hasAccurateFix else { return }
+		guard force || !didCenterOnAccurateFix else { return }
+		recenter(on: locationManager.displayCoordinate)
+		didCenterOnAccurateFix = true
+		Task {
+			await friendsStore.refresh(
+				around: locationManager.displayCoordinate,
+				friendSummaries: pairedFriends.friends
+			)
+		}
+		publishLocation(force: true)
+	}
+
 	private func recenter(on coordinate: CLLocationCoordinate2D) {
 		cameraPosition = .region(
 			MKCoordinateRegion(
@@ -470,8 +880,6 @@ struct MapHomeView: View {
 	}
 }
 
-// The preview helpers below are DEBUG-only, so the preview must be too —
-// otherwise a Release build fails on symbols that were compiled out.
 #if DEBUG
 #Preview("Light") {
 	MapHomePreviewHost()
@@ -491,17 +899,16 @@ private struct MapHomePreviewHost: View {
 	@State private var locationSharing = LocationSharingService()
 	@State private var realtimeClient = RealtimeClient()
 	@State private var suggestionEngine = SuggestionEngine()
-	@State private var mapWeather = MapWeatherController()
-	@State private var weatherObstacles = WeatherObstacleStore()
 	@State private var meetupMemoryStore = MeetupMemoryStore(
 		container: try! MeetupModelContainer.makeInMemory()
 	)
 	@State private var interestSuggestionStore = InterestSuggestionStore()
 	@State private var presenceMode = PresenceModeStore(state: .available)
 	@State private var pulseInbox = PulseInboxStore()
+	@State private var composeDraft: PulseComposeDraft?
 
 	var body: some View {
-		MapHomeView()
+		MapHomeView(composeDraft: $composeDraft)
 			.environment(authSession)
 			.environment(locationManager)
 			.environment(friendsStore)
@@ -518,8 +925,6 @@ private struct MapHomePreviewHost: View {
 			)
 			.environment(realtimeClient)
 			.environment(suggestionEngine)
-			.environment(mapWeather)
-			.environment(weatherObstacles)
 			.environment(meetupMemoryStore)
 			.environment(interestSuggestionStore)
 			.environment(presenceMode)

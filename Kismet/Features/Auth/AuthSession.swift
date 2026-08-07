@@ -63,42 +63,86 @@ final class AuthSession {
 			return
 		}
 
-		do {
-			try await loadMe()
-			await publishEncryptionKeyIfNeeded()
-			await checkAppleCredentialState()
-		} catch {
-			let refreshed = (try? await client.refreshTokens()) ?? false
-			if refreshed {
+		// Cap splash wait: wake + /me should not block forever on a cold Render instance.
+		let restored = await withTaskGroup(of: Bool.self) { group in
+			group.addTask { @MainActor in
+				await self.client.wakeServer()
+				guard !Task.isCancelled else { return false }
 				do {
-					try await loadMe()
-					await publishEncryptionKeyIfNeeded()
-					await checkAppleCredentialState()
+					try await self.loadMe(allowColdStart: true)
+					return true
+				} catch is CancellationError {
+					return false
 				} catch {
-					endRestore(after: error)
+					guard !Task.isCancelled else { return false }
+					let refreshed = (try? await self.client.refreshTokens()) ?? false
+					if refreshed {
+						do {
+							try await self.loadMe(allowColdStart: true)
+							return true
+						} catch is CancellationError {
+							return false
+						} catch {
+							self.endRestore(after: error)
+							return self.phase == .signedIn
+						}
+					} else {
+						self.endRestore(after: error)
+						return self.phase == .signedIn
+					}
 				}
-			} else {
-				endRestore(after: error)
 			}
+			group.addTask {
+				try? await Task.sleep(for: .seconds(18))
+				return false
+			}
+			let first = await group.next() ?? false
+			group.cancelAll()
+			return first
 		}
+
+		if !restored, phase == .bootstrapping {
+			endRestore(after: APIClientError.invalidResponse)
+		}
+
+		guard phase == .signedIn || phase == .needsOnboarding else { return }
+
+		// Don't block the splash on crypto publish or Apple credential checks.
+		Task { await publishEncryptionKeyIfNeeded() }
+		Task { await checkAppleCredentialState() }
 	}
 
 	/// `refreshTokens()` drops the stored credentials when the server rejects them, so
 	/// a surviving refresh token means restore failed for some other reason — an
-	/// unreachable server, most likely. Keep it: the session is probably still valid,
-	/// and wiping it here is what turns one bad launch into a sign-in every launch.
+	/// unreachable server, most likely. Keep it: enter the app shell offline so one
+	/// bad launch doesn't force a full sign-in loop.
 	private func endRestore(after error: Error) {
-		guard KeychainStore.get(.refreshToken) != nil else {
+		guard KeychainStore.get(.refreshToken) != nil,
+		      let userId = KeychainStore.get(.userId)
+		else {
 			clearAuthState()
 			return
 		}
-		user = nil
-		phase = .signedOut
+		user = AuthResponseDTO.User(
+			id: userId,
+			displayName: Self.normalizedName(KeychainStore.get(.cachedDisplayName)),
+			email: nil,
+			interests: [],
+			isNewUser: false,
+			onboardingCompleted: true
+		)
+		phase = .signedIn
 		lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 	}
 
-	private func loadMe() async throws {
-		let me: MeResponseDTO = try await client.get("/me")
+	private func loadMe(allowColdStart: Bool = false) async throws {
+		let me: MeResponseDTO = try await client.request(
+			method: "GET",
+			path: "/me",
+			body: nil as String?,
+			authorized: true,
+			allowColdStart: allowColdStart
+		)
 		applyUser(from: me, isNewUser: false)
 		phase = me.onboardingCompleted ? .signedIn : .needsOnboarding
 		await syncDisplayNameIfNeeded()
@@ -285,33 +329,37 @@ final class AuthSession {
 	}
 
 	private func phaseAfterSignIn(onboardingCompleted: Bool) -> Phase {
-		#if DEBUG
-		// Repeat setup after an explicit sign-in, but not when restoring a valid session.
-		return .needsOnboarding
-		#else
-		return onboardingCompleted ? .signedIn : .needsOnboarding
-		#endif
+		onboardingCompleted ? .signedIn : .needsOnboarding
 	}
 
 	private func checkAppleCredentialState() async {
 		guard let appleUserId = KeychainStore.get(.appleUserId) else { return }
 		let provider = ASAuthorizationAppleIDProvider()
-		await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-			provider.getCredentialState(forUserID: appleUserId) { state, _ in
-				Task { @MainActor in
-					switch state {
-					case .revoked:
-						await self.signOut()
-					default:
-						// `.notFound` also means "this credential isn't associated with
-						// this App ID", which is what a bundle identifier change looks
-						// like. Too weak a signal to tear down a session the server
-						// still accepts.
-						break
+		await withTaskGroup(of: Void.self) { group in
+			group.addTask {
+				await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+					provider.getCredentialState(forUserID: appleUserId) { state, _ in
+						Task { @MainActor in
+							switch state {
+							case .revoked:
+								await self.signOut()
+							default:
+								// `.notFound` also means "this credential isn't associated with
+								// this App ID", which is what a bundle identifier change looks
+								// like. Too weak a signal to tear down a session the server
+								// still accepts.
+								break
+							}
+							continuation.resume()
+						}
 					}
-					continuation.resume()
 				}
 			}
+			group.addTask {
+				try? await Task.sleep(for: .seconds(3))
+			}
+			await group.next()
+			group.cancelAll()
 		}
 	}
 

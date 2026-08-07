@@ -58,17 +58,23 @@ struct NearbyMapProvider: TimelineProvider {
 	) {
 		let snapshot = WidgetAppGroup.loadSnapshot()
 
-		if let cached = WidgetAppGroup.loadCachedMapImage(for: family) {
+		// Prefer the family cache written by the main app after MapKit finishes.
+		if let cached = WidgetAppGroup.loadCachedMapImage(for: family)
+			?? (family == .systemMedium
+				? WidgetAppGroup.loadCachedMapImage(for: .systemLarge)
+				: WidgetAppGroup.loadCachedMapImage(for: .systemMedium))
+			?? WidgetAppGroup.loadCachedMapImage()
+		{
 			completion(FriendAvailabilityEntry(date: .now, snapshot: snapshot, mapImage: cached))
 			return
 		}
 
-		// Widget extensions often can't fetch MapKit tiles — still try, then fall back to any cache.
+		// Last resort: extension MapKit (often fails for tiles).
 		renderMap(snapshot: snapshot, family: family, displaySize: displaySize) { image in
-			let resolved = image
-				?? WidgetAppGroup.loadCachedMapImage(for: family)
-				?? WidgetAppGroup.loadCachedMapImage()
-			completion(FriendAvailabilityEntry(date: .now, snapshot: snapshot, mapImage: resolved))
+			if let image {
+				WidgetAppGroup.saveCachedMapImage(image, for: family)
+			}
+			completion(FriendAvailabilityEntry(date: .now, snapshot: snapshot, mapImage: image))
 		}
 	}
 
@@ -79,17 +85,14 @@ struct NearbyMapProvider: TimelineProvider {
 		completion: @escaping (UIImage?) -> Void
 	) {
 		let fallback: CGSize = family == .systemMedium
-			? CGSize(width: 338, height: 169)
-			: CGSize(width: 338, height: 354)
+			? CGSize(width: 364, height: 178)
+			: CGSize(width: 364, height: 382)
 		let size = displaySize.width > 1 ? displaySize : fallback
 		WidgetMapSnapshotBuilder.render(
 			data: snapshot,
 			size: size,
 			traitCollection: UITraitCollection.current
 		) { image in
-			if let image {
-				WidgetAppGroup.saveCachedMapImage(image, for: family)
-			}
 			completion(image)
 		}
 	}

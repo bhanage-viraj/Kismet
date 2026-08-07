@@ -229,8 +229,9 @@ enum AppGroup {
 
 		var pointSize: CGSize {
 			switch self {
-			case .large: CGSize(width: 338, height: 354)
-			case .medium: CGSize(width: 338, height: 169)
+			// Sized for contentMarginsDisabled Friends Map on modern iPhones.
+			case .large: CGSize(width: 364, height: 382)
+			case .medium: CGSize(width: 364, height: 178)
 			}
 		}
 	}

@@ -117,18 +117,28 @@ actor APIClient {
 	}
 
 	/// Ping health so a sleeping Render free instance starts waking before sign-in.
+	/// Caps wait so launch / sign-in UI aren't stuck for the full cold-start window.
 	func wakeServer() async {
-		do {
-			let _: EmptyResponse = try await request(
-				method: "GET",
-				path: "/actuator/health",
-				body: nil as String?,
-				authorized: false,
-				retryOnUnauthorized: false,
-				allowColdStart: true
-			)
-		} catch {
-			// Wake is best-effort; the real call retries below.
+		await withTaskGroup(of: Void.self) { group in
+			group.addTask {
+				do {
+					let _: EmptyResponse = try await self.request(
+						method: "GET",
+						path: "/actuator/health",
+						body: nil as String?,
+						authorized: false,
+						retryOnUnauthorized: false,
+						allowColdStart: true
+					)
+				} catch {
+					// Wake is best-effort; the real call retries below.
+				}
+			}
+			group.addTask {
+				try? await Task.sleep(for: .seconds(8))
+			}
+			await group.next()
+			group.cancelAll()
 		}
 	}
 
@@ -231,7 +241,8 @@ actor APIClient {
 				path: "/auth/refresh",
 				body: RefreshRequestDTO(refreshToken: refreshToken),
 				authorized: false,
-				retryOnUnauthorized: false
+				retryOnUnauthorized: false,
+				allowColdStart: true
 			)
 			try KeychainStore.set(response.accessToken, for: .accessToken)
 			try KeychainStore.set(response.refreshToken, for: .refreshToken)

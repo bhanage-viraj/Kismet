@@ -18,8 +18,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 /**
- * Sends content-available silent pushes so a recipient can wake, fetch LOCATION blobs,
- * and compute proximity on-device. No-ops when APNs credentials are absent.
+ * Sends APNs wakes so a recipient can fetch blobs on-device.
+ * LOCATION uses silent content-available pushes; PULSE uses alert pushes so the
+ * invite appears on the lock screen even when the app is backgrounded.
+ * No-ops when APNs credentials are absent.
  * Picks the APNs auth key / topic from the token's registered bundle ID when present.
  */
 @Service
@@ -90,11 +92,56 @@ public class PushWakeService {
 		}
 		for (PushTokenDocument token : tokens) {
 			try {
-				sendSilent(token, senderUserId, kind);
+				if ("PULSE".equals(kind)) {
+					sendAlert(token, senderUserId, kind);
+				}
+				else {
+					sendSilent(token, senderUserId, kind);
+				}
 			}
 			catch (Exception ex) {
-				log.debug("Silent push failed for user {}: {}", recipientUserId, ex.getMessage());
+				log.debug("Push failed for user {} kind {}: {}", recipientUserId, kind, ex.getMessage());
 			}
+		}
+	}
+
+	private void sendAlert(PushTokenDocument token, String senderUserId, String kind) throws Exception {
+		List<ApnsAuthTokenProvider.Account> candidates = candidatesFor(token.getBundleId());
+		if (candidates.isEmpty()) {
+			return;
+		}
+
+		String body = "{\"aps\":{"
+				+ "\"alert\":{\"title\":\"New Pulse\",\"body\":\"A friend invited you to hang out.\"},"
+				+ "\"sound\":\"default\","
+				+ "\"content-available\":1"
+				+ "},\"type\":\"blob.available\","
+				+ "\"kind\":\"" + jsonEscape(kind) + "\",\"senderUserId\":\""
+				+ jsonEscape(senderUserId) + "\"}";
+
+		Exception lastError = null;
+		for (ApnsAuthTokenProvider.Account account : candidates) {
+			try {
+				int status = postPush(token.getDeviceToken(), account, body, "alert", "10");
+				if (status == 200) {
+					return;
+				}
+				if (status == 410) {
+					pushTokenService.removeDeviceToken(token.getDeviceToken());
+					log.info("Removed stale APNs token (status=410, bundle={})", account.bundleId());
+					return;
+				}
+				if (status == 400) {
+					continue;
+				}
+				log.warn("APNs alert push status={} bundle={}", status, account.bundleId());
+			}
+			catch (Exception ex) {
+				lastError = ex;
+			}
+		}
+		if (lastError != null) {
+			throw lastError;
 		}
 	}
 
@@ -111,7 +158,7 @@ public class PushWakeService {
 		Exception lastError = null;
 		for (ApnsAuthTokenProvider.Account account : candidates) {
 			try {
-				int status = postSilent(token.getDeviceToken(), account, body);
+				int status = postPush(token.getDeviceToken(), account, body, "background", "5");
 				if (status == 200) {
 					return;
 				}
@@ -144,15 +191,19 @@ public class PushWakeService {
 		return authTokenProvider.accounts();
 	}
 
-	private int postSilent(String deviceToken, ApnsAuthTokenProvider.Account account, String body)
-			throws Exception {
+	private int postPush(
+			String deviceToken,
+			ApnsAuthTokenProvider.Account account,
+			String body,
+			String pushType,
+			String priority) throws Exception {
 		HttpRequest request = HttpRequest.newBuilder()
 				.uri(URI.create(host + "/3/device/" + deviceToken))
 				.timeout(Duration.ofSeconds(15))
 				.header("authorization", "bearer " + account.currentToken())
 				.header("apns-topic", account.bundleId())
-				.header("apns-push-type", "background")
-				.header("apns-priority", "5")
+				.header("apns-push-type", pushType)
+				.header("apns-priority", priority)
 				.header("apns-expiration", "0")
 				.header("content-type", "application/json")
 				.POST(HttpRequest.BodyPublishers.ofString(body))
@@ -171,7 +222,7 @@ public class PushWakeService {
 			}
 		}
 		else if (status != 200 && status != 410) {
-			log.warn("APNs silent push status={} body={}", status, response.body());
+			log.warn("APNs {} push status={} body={}", pushType, status, response.body());
 		}
 		return status;
 	}

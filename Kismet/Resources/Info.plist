@@ -4,6 +4,30 @@
 <dict>
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
+	<!-- Spoken / typed aliases for Siri App Shortcuts (\(.applicationName) + these). -->
+	<key>INAlternativeAppNames</key>
+	<array>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Who's Out</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>who's out</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Whos Out</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>who's out</string>
+		</dict>
+		<dict>
+			<key>INAlternativeAppName</key>
+			<string>Who is Out</string>
+			<key>INAlternativeAppNamePronunciationHint</key>
+			<string>who is out</string>
+		</dict>
+	</array>
+	<key>NSSiriUsageDescription</key>
+	<string>Who's Out uses Siri so you can ask how your friends are doing and start a Pulse hands-free.</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSAllowsLocalNetworking</key>

@@ -20,6 +20,10 @@ final class FriendsStore {
 	private(set) var graphRevision: Int = 0
 
 	private let client: APIClient
+	/// Coalesce overlapping `/friends` fetches and skip if data is still fresh.
+	private var inFlightRefresh: Task<Void, Never>?
+	private var lastRefreshedAt: Date?
+	private static let staleInterval: TimeInterval = 20
 
 	init(client: APIClient = .shared) {
 		self.client = client
@@ -33,7 +37,28 @@ final class FriendsStore {
 	}
 	#endif
 
-	func refresh() async {
+	func refresh(force: Bool = false) async {
+		if !force,
+		   let lastRefreshedAt,
+		   Date().timeIntervalSince(lastRefreshedAt) < Self.staleInterval,
+		   !friends.isEmpty {
+			return
+		}
+
+		if let inFlightRefresh {
+			await inFlightRefresh.value
+			return
+		}
+
+		let task = Task { @MainActor in
+			await self.performRefresh()
+		}
+		inFlightRefresh = task
+		await task.value
+		inFlightRefresh = nil
+	}
+
+	private func performRefresh() async {
 		isLoading = true
 		lastErrorMessage = nil
 		defer { isLoading = false }
@@ -44,6 +69,7 @@ final class FriendsStore {
 				($0.displayName ?? $0.userId).localizedCaseInsensitiveCompare($1.displayName ?? $1.userId)
 					== .orderedAscending
 			}
+			lastRefreshedAt = Date()
 		} catch {
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
@@ -82,7 +108,7 @@ final class FriendsStore {
 				"/friends/redeem",
 				body: RedeemInviteRequestDTO(inviteCode: trimmed)
 			)
-			await refresh()
+			await refresh(force: true)
 			graphRevision += 1
 			let name = friend.displayName ?? "your friend"
 			lastSuccessMessage = "Connected with \(name)."
@@ -107,14 +133,14 @@ final class FriendsStore {
 				"/friends/pair",
 				body: BumpPairRequestDTO(peerUserId: peerUserId, peerPublicKey: peerPublicKey)
 			)
-			await refresh()
+			await refresh(force: true)
 			graphRevision += 1
 			postPairingSucceeded(friend)
 			let name = friend.displayName ?? "your friend"
 			lastSuccessMessage = "Connected with \(name)."
 			return friend
 		} catch APIClientError.httpStatus(409, _) {
-			await refresh()
+			await refresh(force: true)
 			graphRevision += 1
 			if let existing = friends.first(where: { $0.userId == peerUserId }) {
 				postPairingSucceeded(existing)
@@ -144,7 +170,7 @@ final class FriendsStore {
 
 	/// Acceptor side after pairAck — refresh list and notify observers without calling pair again.
 	func noteRemoteBumpPairing(peerUserId: String, peerDisplayName: String, peerPublicKey: String) async {
-		await refresh()
+		await refresh(force: true)
 		graphRevision += 1
 		NotificationCenter.default.post(
 			name: .bumpPairingSucceeded,
@@ -185,6 +211,8 @@ final class FriendsStore {
 		lastSuccessMessage = nil
 		isLoading = false
 		isMutating = false
+		lastRefreshedAt = nil
+		inFlightRefresh = nil
 	}
 
 	func isFriend(userId: String) -> Bool {

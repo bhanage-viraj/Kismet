@@ -63,17 +63,11 @@ final class BumpCoordinator {
 		guard phase == .idle || phase == .failed || phase == .cancelled || phase == .paired else { return }
 		resetSessionState(keepTransport: false)
 		phase = .permissioning
-		statusMessage = "Preparing secure keys…"
+		statusMessage = "Looking for nearby phones…"
 		lastErrorMessage = nil
 
-		do {
-			_ = try await CryptoBox.shared.ensurePublished(using: client)
-		} catch {
-			phase = .failed
-			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-			return
-		}
-
+		// Start Multipeer immediately with local keys; publish to the server in the
+		// background so a cold network doesn't leave the radar on a spinner.
 		let transport = MultipeerBumpTransport(preferredDisplayName: displayName)
 		wireTransport(transport)
 		self.transport = transport
@@ -86,6 +80,15 @@ final class BumpCoordinator {
 
 		phase = .browsing
 		statusMessage = "Looking for nearby phones…"
+
+		Task { [weak self] in
+			guard let self else { return }
+			do {
+				_ = try await CryptoBox.shared.ensurePublished(using: self.client)
+			} catch {
+				// Pairing can still proceed via Multipeer key exchange; server publish is best-effort.
+			}
+		}
 	}
 
 	func stop() {

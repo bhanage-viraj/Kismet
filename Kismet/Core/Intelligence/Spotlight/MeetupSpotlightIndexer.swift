@@ -106,8 +106,8 @@ final class MeetupSpotlightIndexer: NSObject {
 	private func makeHabitsItem(from store: MeetupMemoryStore) -> CSSearchableItem? {
 		guard let profile = store.learnedProfile, !profile.summaryText.isEmpty else { return nil }
 		let attributes = CSSearchableItemAttributeSet(contentType: .content)
-		attributes.title = "Kismet hangout habits"
-		attributes.displayName = "Kismet hangout habits"
+		attributes.title = "Who's Out hangout habits"
+		attributes.displayName = "Who's Out hangout habits"
 		let hours = profile.preferredHours.map { String(format: "%02d:00", $0) }.joined(separator: ", ")
 		let cats = profile.preferredCategories.joined(separator: ", ")
 		attributes.contentDescription = [

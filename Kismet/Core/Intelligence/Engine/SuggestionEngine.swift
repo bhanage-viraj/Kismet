@@ -10,6 +10,7 @@ final class SuggestionEngine {
 	let store: SuggestionStore
 	private let gateway: FoundationModelsGateway
 	private let ranker: OpportunityRanker
+	private var refreshGeneration = 0
 
 	init(
 		store: SuggestionStore? = nil,
@@ -30,11 +31,16 @@ final class SuggestionEngine {
 		people: [MapPerson],
 		learned: LearnedSlice = .empty
 	) async {
+		refreshGeneration += 1
+		let generation = refreshGeneration
+
 		isRunning = true
 		store.setRefreshing(true)
 		defer {
-			isRunning = false
-			store.setRefreshing(false)
+			if generation == refreshGeneration {
+				isRunning = false
+				store.setRefreshing(false)
+			}
 		}
 
 		let context = await ContextBuilder(
@@ -46,6 +52,8 @@ final class SuggestionEngine {
 			people: people,
 			learned: learned
 		).build()
+
+		guard generation == refreshGeneration else { return }
 
 		let ranked = ranker.rank(context: context)
 		guard !ranked.isEmpty else {
@@ -61,6 +69,7 @@ final class SuggestionEngine {
 		if gateway.isAvailable {
 			do {
 				let bundle = try await gateway.generateSuggestions(context: context, ranked: ranked)
+				guard generation == refreshGeneration else { return }
 				let cards = merge(bundle: bundle, ranked: ranked)
 				if cards.isEmpty {
 					store.replace(
@@ -74,11 +83,22 @@ final class SuggestionEngine {
 					stashPulseDraft(from: cards)
 				}
 				return
-			} catch {
+			} catch is CancellationError {
+				// Task cancelled by a newer refresh — keep quiet; never surface Swift error text.
+				guard generation == refreshGeneration else { return }
 				store.replace(
 					cards: FallbackComposer.cards(from: ranked),
 					usedModel: false,
-					status: (error as? LocalizedError)?.errorDescription ?? error.localizedDescription,
+					status: nil,
+					userCoordinate: coordinate
+				)
+				return
+			} catch {
+				guard generation == refreshGeneration else { return }
+				store.replace(
+					cards: FallbackComposer.cards(from: ranked),
+					usedModel: false,
+					status: Self.userFacingStatus(for: error),
 					userCoordinate: coordinate
 				)
 				return
@@ -161,5 +181,27 @@ final class SuggestionEngine {
 				}()
 			)
 		}
+	}
+
+	/// Never surface raw Foundation / cancellation error strings in the UI.
+	private static func userFacingStatus(for error: Error) -> String? {
+		if error is CancellationError { return nil }
+		let ns = error as NSError
+		if ns.domain == NSURLErrorDomain, ns.code == NSURLErrorCancelled { return nil }
+		if let localized = (error as? LocalizedError)?.errorDescription?
+			.trimmingCharacters(in: .whitespacesAndNewlines),
+		   !localized.isEmpty,
+		   !isRawSystemError(localized) {
+			return localized
+		}
+		return nil
+	}
+
+	private static func isRawSystemError(_ message: String) -> Bool {
+		let lower = message.lowercased()
+		return lower.contains("cancellationerror")
+			|| lower.contains("couldn't be completed")
+			|| lower.contains("could not be completed")
+			|| lower.contains("(swift.")
 	}
 }

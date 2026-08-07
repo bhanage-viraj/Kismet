@@ -13,6 +13,8 @@ final class MapFriendsStore {
 
 	private let client: APIClient
 	private let crypto: CryptoBox
+	private var inFlightRefresh: Task<Void, Never>?
+	private var refreshGeneration = 0
 
 	init(client: APIClient = .shared, crypto: CryptoBox = .shared) {
 		self.client = client
@@ -31,10 +33,42 @@ final class MapFriendsStore {
 	}
 	#endif
 
-	func refresh(around coordinate: CLLocationCoordinate2D?) async {
+	/// Refresh map pins. Pass `friendSummaries` to skip a duplicate `/friends` fetch
+	/// when the social graph was just loaded.
+	func refresh(
+		around coordinate: CLLocationCoordinate2D?,
+		friendSummaries: [FriendSummaryDTO]? = nil
+	) async {
+		refreshGeneration += 1
+		let generation = refreshGeneration
+		inFlightRefresh?.cancel()
+
+		let task = Task { @MainActor in
+			await self.performRefresh(
+				around: coordinate,
+				friendSummaries: friendSummaries,
+				generation: generation
+			)
+		}
+		inFlightRefresh = task
+		await task.value
+		if inFlightRefresh == task {
+			inFlightRefresh = nil
+		}
+	}
+
+	private func performRefresh(
+		around coordinate: CLLocationCoordinate2D?,
+		friendSummaries: [FriendSummaryDTO]?,
+		generation: Int
+	) async {
 		isLoading = true
 		lastErrorMessage = nil
-		defer { isLoading = false }
+		defer {
+			if generation == refreshGeneration {
+				isLoading = false
+			}
+		}
 
 		let origin = coordinate ?? MockFriendsProvider.fallbackCoordinate
 		let myUserId = KeychainStore.get(.userId)
@@ -42,14 +76,22 @@ final class MapFriendsStore {
 		do {
 			async let mapResponse: MapFriendsResponseDTO = client.get("/map/friends")
 			async let pendingResponse: PendingBlobsResponseDTO = client.get("/blobs/pending")
-			async let friendsResponse: FriendListResponseDTO = client.get("/friends")
 
 			let mapFriends = try await mapResponse.friends
 			let pending = try await pendingResponse.blobs
-			let friendSummaries = try await friendsResponse.friends
+			guard generation == refreshGeneration, !Task.isCancelled else { return }
+
+			let summaries: [FriendSummaryDTO]
+			if let friendSummaries {
+				summaries = friendSummaries
+			} else {
+				let friendsResponse: FriendListResponseDTO = try await client.get("/friends")
+				guard generation == refreshGeneration, !Task.isCancelled else { return }
+				summaries = friendsResponse.friends
+			}
 
 			let publicKeys = Dictionary(
-				uniqueKeysWithValues: friendSummaries.compactMap { friend -> (String, String)? in
+				uniqueKeysWithValues: summaries.compactMap { friend -> (String, String)? in
 					guard let key = friend.publicKey, !key.isEmpty else { return nil }
 					return (friend.userId, key)
 				}
@@ -58,6 +100,7 @@ final class MapFriendsStore {
 			var locationsBySender: [String: (payload: LocationPayloadDTO, updatedAt: Date)] = [:]
 			if let myUserId {
 				for blob in pending where blob.kind.uppercased() == "LOCATION" {
+					guard generation == refreshGeneration, !Task.isCancelled else { return }
 					guard let senderKey = publicKeys[blob.senderUserId] else { continue }
 					do {
 						let payload = try await crypto.openLocation(
@@ -77,6 +120,8 @@ final class MapFriendsStore {
 				}
 			}
 
+			guard generation == refreshGeneration, !Task.isCancelled else { return }
+
 			let originLocation = CLLocation(latitude: origin.latitude, longitude: origin.longitude)
 			let mapped: [MapPerson] = mapFriends.compactMap { friend in
 				guard let location = locationsBySender[friend.userId] else { return nil }
@@ -95,7 +140,9 @@ final class MapFriendsStore {
 			if let selectedFriendID, !mapped.contains(where: { $0.id == selectedFriendID }) {
 				self.selectedFriendID = nil
 			}
+			Task { await FriendSpotlightIndexer.reindex() }
 		} catch {
+			guard generation == refreshGeneration else { return }
 			lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
 		}
 	}

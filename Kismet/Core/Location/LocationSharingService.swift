@@ -19,6 +19,7 @@ final class LocationSharingService {
 
 	private var lastUploadedLocation: CLLocation?
 	private var uploadTask: Task<Void, Never>?
+	private var uploadGeneration = 0
 
 	init(
 		client: APIClient = .shared,
@@ -38,6 +39,7 @@ final class LocationSharingService {
 
 	func stop() {
 		isSharingActive = false
+		uploadGeneration += 1
 		uploadTask?.cancel()
 		uploadTask = nil
 	}
@@ -55,7 +57,17 @@ final class LocationSharingService {
 		guard isSharingActive || force else { return }
 		guard let location, let senderUserId, !senderUserId.isEmpty else { return }
 
+		// Don't cancel an in-flight upload on every GPS tick — that caused aborted
+		// location publishes under rapid location updates. Force / presence changes
+		// still replace the pending work.
+		if !force, uploadTask != nil {
+			return
+		}
+
+		uploadGeneration += 1
+		let generation = uploadGeneration
 		uploadTask?.cancel()
+
 		uploadTask = Task { [weak self] in
 			await self?.upload(
 				location: location,
@@ -64,6 +76,8 @@ final class LocationSharingService {
 				presence: presence,
 				force: force
 			)
+			guard let self, self.uploadGeneration == generation else { return }
+			self.uploadTask = nil
 		}
 	}
 

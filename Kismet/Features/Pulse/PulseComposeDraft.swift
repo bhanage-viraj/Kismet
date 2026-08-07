@@ -80,12 +80,6 @@ struct PulseComposeDraft: Identifiable, Hashable, Sendable {
 				|| (card.venueName?.localizedCaseInsensitiveContains($0.title) == true)
 		} ?? .coffee
 
-		let defaultStart = Calendar.current.nextDate(
-			after: Date(),
-			matching: DateComponents(hour: 17, minute: 0),
-			matchingPolicy: .nextTime
-		) ?? Date().addingTimeInterval(3600)
-
 		return PulseComposeDraft(
 			title: card.pulseMessage?.nilIfEmpty
 				?? card.ctaTitle.nilIfEmpty
@@ -93,11 +87,33 @@ struct PulseComposeDraft: Identifiable, Hashable, Sendable {
 			activity: activity,
 			venueName: card.venueName ?? "",
 			venueAddress: "",
-			startsAt: defaultStart,
+			startsAt: defaultEveningStart,
 			recipientUserId: card.friendID,
 			recipientDisplayName: card.displayName,
 			suggestionCardID: card.id
 		)
+	}
+
+	static func from(person: MapPerson) -> PulseComposeDraft {
+		let activity = PulseActivity.more
+		return PulseComposeDraft(
+			title: activity.defaultTitle,
+			activity: activity,
+			venueName: "",
+			venueAddress: "",
+			startsAt: defaultEveningStart,
+			recipientUserId: person.id,
+			recipientDisplayName: person.displayName,
+			suggestionCardID: nil
+		)
+	}
+
+	private static var defaultEveningStart: Date {
+		Calendar.current.nextDate(
+			after: Date(),
+			matching: DateComponents(hour: 17, minute: 0),
+			matchingPolicy: .nextTime
+		) ?? Date().addingTimeInterval(3600)
 	}
 }
 
