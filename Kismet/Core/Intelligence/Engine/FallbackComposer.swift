@@ -1,10 +1,19 @@
 import Foundation
 
 enum FallbackComposer {
-	static func cards(from ranked: [RankedOpportunity]) -> [SuggestionCard] {
+	static func cards(
+		from ranked: [RankedOpportunity],
+		venueStates: [String: VenueResolutionState] = [:],
+		context: KismetContext? = nil
+	) -> [SuggestionCard] {
 		ranked.map { item in
 			let friend = item.friend
-			let chips = factChips(for: item)
+			let venue = VenueGrounding.mergeVenue(
+				resolverState: venueStates[friend.id],
+				modelVenueName: nil,
+				modelVenueETAMinutes: nil
+			)
+			let chips = factChips(for: item, venue: venue)
 			let reason = chips.joined(separator: " · ")
 			let cta: (String, String) = {
 				switch friend.presence {
@@ -16,6 +25,9 @@ enum FallbackComposer {
 					return ("Hidden", "eye.slash")
 				}
 			}()
+
+			let hints = context.map { PulseDraftHints.make(item: item, context: $0) }
+			let activities = VenueGrounding.activityCandidates(for: item)
 
 			return SuggestionCard(
 				id: friend.id,
@@ -30,16 +42,35 @@ enum FallbackComposer {
 				factChips: chips,
 				ctaTitle: cta.0,
 				ctaSystemImage: cta.1,
-				venueName: nil,
-				venueETAMinutes: nil,
+				venueName: venue.venueName,
+				venueETAMinutes: venue.venueETAMinutes,
 				confidence: min(1, max(0.35, item.score / 3)),
 				urgency: urgency(for: item),
-				isModelGenerated: false
+				isModelGenerated: false,
+				pulseMessage: PulseMessageComposer.draft(
+					venue: venue.selectedVenue,
+					hints: hints,
+					reasonCodes: item.reasonCodes,
+					sharedInterests: friend.sharedInterests
+				),
+				venueCandidates: {
+					if case .resolved(let c) = venue.resolution { return c }
+					return nil
+				}(),
+				selectedVenue: venue.selectedVenue,
+				venueResolution: venue.resolution,
+				venueCoordinate: venue.venueCoordinate,
+				venueDisplayETALabel: venue.displayETALabel,
+				draftHints: hints,
+				activityCandidates: activities
 			)
 		}
 	}
 
-	static func factChips(for item: RankedOpportunity) -> [String] {
+	static func factChips(
+		for item: RankedOpportunity,
+		venue: MergedVenueFields? = nil
+	) -> [String] {
 		var chips: [String] = []
 		let friend = item.friend
 
@@ -86,7 +117,26 @@ enum FallbackComposer {
 			chips.append("Met recently")
 		}
 
+		appendVenueChips(to: &chips, venue: venue)
+
 		return chips
+	}
+
+	static func appendVenueChips(to chips: inout [String], venue: MergedVenueFields?) {
+		guard let venue else { return }
+		switch venue.resolution {
+		case .resolved(let candidates):
+			if !candidates.alternatives.isEmpty {
+				chips.append("Nearby options available")
+			} else if let name = venue.venueName {
+				let label = venue.displayETALabel.map { " · \($0)" } ?? ""
+				chips.append("Meet at \(name)\(label)")
+			}
+		case .loading:
+			chips.append("Finding places…")
+		case .empty:
+			break
+		}
 	}
 
 	private static func urgency(for item: RankedOpportunity) -> SuggestionUrgency {

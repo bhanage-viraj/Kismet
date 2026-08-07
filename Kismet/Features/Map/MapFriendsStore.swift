@@ -102,7 +102,7 @@ final class MapFriendsStore {
 			var myInterestSet: Set<String> = []
 			if let myUserId {
 				let interestMatcher = InterestMatchSharingService(client: client, crypto: crypto)
-				async let sealed = interestMatcher.loadFriendInterests(friends: friendSummaries)
+				async let sealed = interestMatcher.loadFriendInterests(friends: summaries)
 				async let meResponse: MeResponseDTO = client.get("/me")
 				sealedInterestsBySender = await sealed
 				if let me = try? await meResponse {
@@ -211,6 +211,8 @@ final class MapFriendsStore {
 			presenceState: presence,
 			distanceMeters: distance,
 			sharedInterests: interestsList,
+			freeUntil: friend.availability.freeUntil,
+			freeFrom: friend.availability.freeFrom,
 			insightSummary: insightSummary(
 				presence: presence,
 				availability: friend.availability,

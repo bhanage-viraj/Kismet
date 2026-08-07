@@ -106,6 +106,12 @@ enum MockFriendsProvider {
 				presenceState: presence,
 				distanceMeters: distance,
 				sharedInterests: interests,
+				freeUntil: seed.availability == .free
+					? Date().addingTimeInterval(2 * 60 * 60)
+					: nil,
+				freeFrom: seed.availability == .busy
+					? Date().addingTimeInterval(90 * 60)
+					: nil,
 				insightSummary: seed.insightSummary,
 				intentLabel: seed.intentLabel,
 				neighborhoodLabel: seed.neighborhoodLabel,

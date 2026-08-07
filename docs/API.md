@@ -377,7 +377,17 @@ A `CONNECT` without a valid access token is rejected. Subscribe to `/user/queue/
 
 Event types are `blob.available`, `friend.pair.created` and `friend.pair.revoked`. Blob events are **notifications only** and never carry ciphertext — fetch it with `GET /blobs/pending`.
 
-When APNs is configured, `LOCATION`, `PULSE`, and `MEETUP` blob uploads also send a **silent** (`content-available`) push to the recipient's registered device tokens so a backgrounded phone can wake, decrypt, and evaluate proximity / inbox / shared meetup on-device. The push payload carries only `type`, `kind`, and `senderUserId` — never coordinates.
+When APNs is configured, blob uploads wake the recipient's registered device tokens so a backgrounded phone can decrypt and evaluate on-device. The push payload carries only `type`, `kind`, and `senderUserId` — never coordinates.
+
+| Kind | APNs push type | Notes |
+|---|---|---|
+| `LOCATION` | Silent (`content-available`) | Proximity / map refresh |
+| `MEETUP` | Silent (`content-available`) | Shared Live Activity dual-start |
+| `PULSE` | **Alert** (`apns-push-type: alert`) + `content-available` | Lock-screen “New Pulse” invite |
+
+Wake cooldowns are keyed by `(userId, kind)` so a LOCATION silent wake does not suppress a PULSE alert within the 30s window.
+
+Set `APNS_ENABLED=true` and provide key material (`APNS_*` / `APNS_2_*`) matching the device bundle ID — see [`.env.example`](../server/.env.example). Without credentials the relay still stores blobs and notifies via WebSocket when the app is foregrounded.
 
 The broker is in-memory, so this is single-instance only; scaling out means swapping in a Redis or RabbitMQ relay.
 
@@ -457,7 +467,7 @@ See `server/.env.example`:
 | `BLOB_TTL_HOURS` | How long relayed ciphertext survives, default `12` |
 | `BLOB_MAX_CIPHERTEXT_BYTES` | Per-blob size cap, default `4096` |
 | `BLOB_MAX_BATCH_SIZE` | Blobs per upload, default `500` |
-| `APNS_ENABLED` | `true` to send silent wakes on LOCATION blobs |
+| `APNS_ENABLED` | `true` to send wakes (PULSE alert; LOCATION/MEETUP silent) |
 | `APNS_KEY_ID` / `APNS_TEAM_ID` | Primary Apple Developer key (your team) |
 | `APNS_KEY_PATH` or `APNS_KEY_P8` | Auth Key `.p8` on disk or inline PEM |
 | `APNS_BUNDLE_ID` | Primary iOS `PRODUCT_BUNDLE_IDENTIFIER` |

@@ -35,7 +35,7 @@ public class PushWakeService {
 	private final HttpClient httpClient;
 	private final ExecutorService executor;
 	private final String host;
-	private final Map<String, Long> lastWakeByUser = new ConcurrentHashMap<>();
+	private final Map<String, Long> lastWakeByUserKind = new ConcurrentHashMap<>();
 
 	public PushWakeService(
 			PushTokenService pushTokenService,
@@ -72,16 +72,17 @@ public class PushWakeService {
 			if (recipientUserId == null || recipientUserId.isBlank()) {
 				continue;
 			}
-			if (!shouldWake(recipientUserId)) {
+			if (!shouldWake(recipientUserId, wakeKind)) {
 				continue;
 			}
 			executor.execute(() -> sendToUser(recipientUserId, senderUserId, wakeKind));
 		}
 	}
 
-	private boolean shouldWake(String userId) {
+	private boolean shouldWake(String userId, String kind) {
 		long now = System.currentTimeMillis();
-		Long previous = lastWakeByUser.put(userId, now);
+		String key = userId + "|" + kind;
+		Long previous = lastWakeByUserKind.put(key, now);
 		return previous == null || now - previous >= COOLDOWN_MILLIS;
 	}
 

@@ -245,7 +245,7 @@ final class BackgroundProximityController {
 				venueName: venueName,
 				systemImage: payload.systemImage,
 				participants: participants,
-				venueCoordinate: nil,
+				venueCoordinate: payload.venueCoordinate,
 				meetAt: payload.meetAt,
 				currentLocation: locationManager.userLocation
 			)

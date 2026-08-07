@@ -12,6 +12,9 @@ struct PulseComposeView: View {
 	@State private var showWhenPicker = false
 	@State private var showWhereEditor = false
 	@State private var showMoreActivities = false
+	@State private var venueSelection: PulseComposeSelection?
+	@State private var isRefreshingVenues = false
+	@Environment(VisitLocationManager.self) private var locationManager
 
 	private var titleColor: Color { KismetTheme.Insight.titleColor(for: colorScheme) }
 	private var bodyColor: Color { KismetTheme.Insight.bodyColor(for: colorScheme) }
@@ -75,6 +78,34 @@ struct PulseComposeView: View {
 			moreActivitiesSheet
 				.presentationDetents([.medium])
 		}
+		.onAppear {
+			syncVenueSelectionFromDraft()
+		}
+		.onChange(of: draft.venueCandidates) { _, _ in
+			syncVenueSelectionFromDraft()
+		}
+		.onChange(of: venueSelection?.selectedID) { _, _ in
+			guard let venue = venueSelection?.selected else { return }
+			draft.apply(venue: venue)
+			if let hints = draft.draftHints {
+				draft.title = PulseMessageComposer.draft(venue: venue, hints: hints)
+			}
+		}
+	}
+
+	private func syncVenueSelectionFromDraft() {
+		if let candidates = draft.venueCandidates {
+			var selection = PulseComposeSelection(candidates: candidates)
+			if let lat = draft.venueLatitude, let lon = draft.venueLongitude,
+			   let match = candidates.all.first(where: {
+				   abs($0.latitude - lat) < 0.0001 && abs($0.longitude - lon) < 0.0001
+			   }) {
+				selection.select(match)
+			}
+			venueSelection = selection
+		} else {
+			venueSelection = nil
+		}
 	}
 
 	// MARK: - Title
@@ -115,7 +146,7 @@ struct PulseComposeView: View {
 				.foregroundStyle(bodyColor)
 
 			HStack(spacing: 0) {
-				ForEach(PulseActivity.allCases) { activity in
+				ForEach(displayedActivities) { activity in
 					activityChip(activity)
 						.frame(maxWidth: .infinity)
 				}
@@ -123,31 +154,56 @@ struct PulseComposeView: View {
 		}
 	}
 
+	/// Prefer suggested + alternatives when Intelligence provided them; otherwise full set.
+	private var displayedActivities: [PulseActivity] {
+		if let candidates = draft.activityCandidates {
+			var list = candidates.all
+			if !list.contains(.more) {
+				list.append(.more)
+			}
+			return list
+		}
+		return PulseActivity.allCases
+	}
+
 	private func activityChip(_ activity: PulseActivity) -> some View {
 		let selected = draft.activity == activity
+		let isSuggested = draft.activityCandidates?.suggested == activity
 		return Button {
 			if activity == .more {
 				showMoreActivities = true
 			} else {
-				selectActivity(activity)
+				Task { await selectActivityAndRefreshVenues(activity) }
 			}
 		} label: {
 			VStack(spacing: 8) {
-				ZStack {
-					Circle()
-						.fill(selected ? activity.accent.opacity(0.22) : fieldBg)
-						.overlay(
-							Circle()
-								.strokeBorder(
-									selected ? activity.accent.opacity(0.55) : Color.primary.opacity(0.08),
-									lineWidth: selected ? 1.5 : 1
-								)
-						)
-						.frame(width: 56, height: 56)
+				ZStack(alignment: .topTrailing) {
+					ZStack {
+						Circle()
+							.fill(selected ? PulseComposeAccent.solid.opacity(0.18) : fieldBg)
+							.overlay(
+								Circle()
+									.strokeBorder(
+										selected ? PulseComposeAccent.solid.opacity(0.55) : Color.primary.opacity(0.08),
+										lineWidth: selected ? 1.5 : 1
+									)
+							)
+							.frame(width: 56, height: 56)
 
-					Image(systemName: activity.symbol)
-						.font(.system(size: 20, weight: .semibold))
-						.foregroundStyle(selected ? activity.accent : titleColor.opacity(0.75))
+						Image(systemName: activity.symbol)
+							.font(.system(size: 20, weight: .semibold))
+							.foregroundStyle(selected ? PulseComposeAccent.solid : titleColor.opacity(0.75))
+					}
+
+					if isSuggested {
+						Image(systemName: "sparkles")
+							.font(.system(size: 9, weight: .bold))
+							.foregroundStyle(PulseComposeAccent.solid)
+							.padding(4)
+							.background(fieldBg, in: Circle())
+							.overlay(Circle().strokeBorder(Color.primary.opacity(0.06), lineWidth: 1))
+							.offset(x: 4, y: -2)
+					}
 				}
 
 				Text(activity.title)
@@ -156,13 +212,22 @@ struct PulseComposeView: View {
 			}
 		}
 		.buttonStyle(.plain)
+		.accessibilityLabel(isSuggested ? "\(activity.title), Suggested" : activity.title)
 	}
 
-	private func selectActivity(_ activity: PulseActivity) {
-		let wasDefault = PulseActivity.allCases.contains { draft.title == $0.defaultTitle }
-		draft.activity = activity
-		if draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || wasDefault {
-			draft.title = activity.defaultTitle
+	@MainActor
+	private func selectActivityAndRefreshVenues(_ activity: PulseActivity) async {
+		draft.selectActivity(activity)
+		isRefreshingVenues = true
+		defer { isRefreshingVenues = false }
+		let origin = locationManager.displayCoordinate
+		if let candidates = await VenueGrounding.resolve(activity: activity, origin: origin) {
+			draft.venueCandidates = candidates
+			draft.apply(venue: candidates.suggested)
+			venueSelection = PulseComposeSelection(candidates: candidates)
+			if let hints = draft.draftHints {
+				draft.title = PulseMessageComposer.draft(venue: candidates.suggested, hints: hints)
+			}
 		}
 	}
 
@@ -170,9 +235,20 @@ struct PulseComposeView: View {
 
 	private var whereSection: some View {
 		VStack(alignment: .leading, spacing: 10) {
-			Text("Where?")
-				.font(.subheadline.weight(.medium))
-				.foregroundStyle(bodyColor)
+			HStack {
+				Text("Where?")
+					.font(.subheadline.weight(.medium))
+					.foregroundStyle(bodyColor)
+				if isRefreshingVenues {
+					ProgressView()
+						.controlSize(.small)
+				}
+			}
+
+			if let selectionBinding = Binding($venueSelection) {
+				VenuePickerChipRow(selection: selectionBinding)
+					.padding(.horizontal, -24)
+			}
 
 			Button { showWhereEditor = true } label: {
 				detailRow(
@@ -234,14 +310,7 @@ struct PulseComposeView: View {
 			.frame(height: 56)
 			.foregroundStyle(.white)
 			.background(
-				LinearGradient(
-					colors: [
-						Color(red: 1.00, green: 0.52, blue: 0.32),
-						Color(red: 0.98, green: 0.38, blue: 0.36),
-					],
-					startPoint: .leading,
-					endPoint: .trailing
-				),
+				PulseComposeAccent.gradient,
 				in: RoundedRectangle(cornerRadius: 18, style: .continuous)
 			)
 		}
@@ -278,9 +347,9 @@ struct PulseComposeView: View {
 			List(InterestCatalog.all) { item in
 				Button {
 					if let matched = PulseActivity(rawValue: item.id) {
-						selectActivity(matched)
+						Task { await selectActivityAndRefreshVenues(matched) }
 					} else {
-						draft.activity = .more
+						Task { await selectActivityAndRefreshVenues(.more) }
 						if draft.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
 							draft.title = item.name
 						}

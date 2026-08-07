@@ -57,7 +57,7 @@ Legend: ✅ done · ⚠️ partial / ops · ❌ cut · ⬜ exists but not fully 
 | | Item | Exists | Missing to finish |
 |---|---|---|---|
 | ⬜ | **APNs deploy** | `PushWakeService`, `LiveActivityPushService`, client token registrars | Set `APNS_ENABLED=true` + key material ([`server/.env.example`](../server/.env.example)) |
-| ⬜ | **Always location UX** | `requestAlwaysAuthorizationIfNeeded`, background proximity | Onboarding / Profile status + re-prompt if dismissed |
+| ⬜ | **Always location UX** | Single `requestAlwaysAuthorization()` on first map appear (no WhenInUse→upgrade); SLC when Always granted | Settings recovery if user picked While Using only |
 | ⬜ | **URL / deep links** | `WidgetDeepLink` (`kismet://friend|meetup|pulse/accept|home`); invite `kismet://pair?code=` | `onOpenURL` + `CFBundleURLTypes`; QR / widget taps open generically today |
 
 ### Visible UI / incomplete loops
